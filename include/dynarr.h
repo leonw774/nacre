@@ -30,9 +30,9 @@ extern void append(dynarr_t* x, const void* const elem);
 
 extern void pop(dynarr_t* x);
 
-extern void* at(dynarr_t* x, const unsigned int index);
+extern void* at(const dynarr_t* x, const unsigned int index);
 
-extern void* back(dynarr_t* x);
+extern void* back(const dynarr_t* x);
 
 extern int concat(dynarr_t* x, dynarr_t* y);
 

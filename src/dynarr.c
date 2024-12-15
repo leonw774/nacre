@@ -74,12 +74,12 @@ pop(dynarr_t* x) {
 }
 
 inline void*
-at(dynarr_t* x, const unsigned int index) {
+at(const dynarr_t* x, const unsigned int index) {
     return x->data + index * x->elem_size;
 }
 
 inline void*
-back(dynarr_t* x) {
+back(const dynarr_t* x) {
     if (x->data == NULL || x->size == 0) {
         return NULL;
     }
