@@ -1,11 +1,11 @@
 FLAGS = -g -I include/
 DEPS = src/*.c
-TEST_DEPS = tests/*.c
-TEST_TARGETS = tests/test_epsnfa
+TEST_DEPS = $(wildcard tests/*.c)
+TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(TEST_DEPS))
 
 test: $(TEST_TARGETS)
 
-tests/test_epsnfa: $(DEPS) $(TEST_DEPS)
+tests/%: $(DEPS) tests/%.c
 	gcc $(FLAGS) -o $@ $^
 
 clean:

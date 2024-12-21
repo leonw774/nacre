@@ -50,3 +50,12 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# Other
+.vsocde
+
+# Outputs
+tests/
+!tests/*.c
+debug.txt
+nfa-regex
