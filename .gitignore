@@ -52,7 +52,7 @@ Mkfile.old
 dkms.conf
 
 # Other
-.vsocde
+.vscode
 
 # Outputs
 tests/
