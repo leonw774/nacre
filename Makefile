@@ -1,4 +1,4 @@
-FLAGS = -g -I include/
+FLAGS = -g -I include/ -Wall -Wno-unused-function
 DEPS = src/*.c
 TEST_DEPS = $(wildcard tests/*.c)
 TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(TEST_DEPS))

@@ -13,10 +13,10 @@
     ESC_CHAR     = '-' | ']' |  | 'n' | 'r' | 't' | 'v' | 'f';
     CHAR         = [all printables]
 */
-re_ast_t
-parse_bracket_expr(char* input_str, const int is_debug) {
+// re_ast_t
+// parse_bracket_expr(char* input_str, const int is_debug) {
 
-}
+// }
 
 dynarr_t tokenization(const char* input_str) {
     enum state { ST_ESC, ST_DUP, ST_BRK, ST_NOR};
@@ -25,7 +25,7 @@ dynarr_t tokenization(const char* input_str) {
     char c;
     char dup_str[DUP_STR_MAX_LEN];
     size_t input_size = strlen(input_str);
-    dynarr_t input = new_dynarr(sizeof(re_token_t));
+    dynarr_t input = dynarr_new(sizeof(re_token_t));
     re_token_t t;
     const re_token_t CONCAT_OP = {
         .type = TYPE_BOP,
@@ -79,7 +79,7 @@ dynarr_t tokenization(const char* input_str) {
                     /* if dup_str is empty (the "{m,}" format),
                     dup_max should be 0 to indicate "no maximum" */
                     t.payload2 = (dup_str_len == 0)
-                        ? 0 : atoi_check_dup_max(dup_str);
+                        ? DUP_NO_MAX : atoi_check_dup_max(dup_str);
                 }
                 else {
                     /* "{}" is not allowed" */
@@ -185,18 +185,6 @@ dynarr_t tokenization(const char* input_str) {
     return input;
 }
 
-/* return a new list of tokens that expand the duplication and plus operation
-   with concat, alert, and star. for example:
-    - "a+" become "aa*"
-    - "a{2,3}" become "aa|aaa"
-    - "a{3,}" become "aaaa*"
-    - "a{4}" become "aaaa"
-*/
-dynarr_t expand_dups(dynarr_t* postfix_tokens) {
-
-}
-
-
 inline int
 atoi_check_dup_max(const char dup_str[DUP_STR_MAX_LEN]) {
     int d = atoi(dup_str);
@@ -213,8 +201,8 @@ atoi_check_dup_max(const char dup_str[DUP_STR_MAX_LEN]) {
 
 re_ast_t
 parse_regex(const char* input_str, const int is_debug) {
-    int i, j, l, r;
-    dynarr_t input, output, expanded_output;
+    int i, j;
+    dynarr_t input, output;
     dynarr_t op_stack, index_stack;
     re_ast_t ast = {
         .tokens = NULL,
@@ -230,13 +218,13 @@ parse_regex(const char* input_str, const int is_debug) {
     if (is_debug) {
         printf("--- input ---\n");
         for (i = 0; i < input.size; i++) {
-            print_re_token(*(re_token_t*) at(&input, i));
+            re_token_print(*(re_token_t*) at(&input, i));
         }
     }
 
     /* transform to postfix notation with shunting yard algorithm */
-    output = new_dynarr(sizeof(re_token_t));
-    op_stack = new_dynarr(sizeof(re_token_t));
+    output = dynarr_new(sizeof(re_token_t));
+    op_stack = dynarr_new(sizeof(re_token_t));
     for (i = 0; i < input.size; i++) {
         re_token_t* cur_token = at(&input, i);
         /* binary operator and left parenthese */
@@ -280,12 +268,12 @@ parse_regex(const char* input_str, const int is_debug) {
             printf("output:\n");
             for (j = 0; j < output.size; j++) {
                 printf("  ");
-                print_re_token(*(re_token_t*) at(&output, j));
+                re_token_print(*(re_token_t*) at(&output, j));
             }
             printf("op_stack:\n");
             for (j = 0; j < op_stack.size; j++) {
                 printf("  ");
-                print_re_token(*(re_token_t*) at(&op_stack, j));
+                re_token_print(*(re_token_t*) at(&op_stack, j));
             }
         }
     }
@@ -294,17 +282,17 @@ parse_regex(const char* input_str, const int is_debug) {
         append(&output, back(&op_stack));
         pop(&op_stack);
     }
-    free_dynarr(&input);
-    free_dynarr(&op_stack);
+    dynarr_free(&input);
+    dynarr_free(&op_stack);
 
     if (is_debug) {
         printf("--- postfix result ---\n");
         for (i = 0; i < output.size; i++) {
-            print_re_token(*(re_token_t*) at(&output, i));
+            re_token_print(*(re_token_t*) at(&output, i));
         }
     }
 
-    expanded_output = expand_dups(&output);
+    // expanded_output = expand_dups(&output);
 
     if (is_debug) {
         printf("--- build ast tree ---\n");
@@ -316,7 +304,7 @@ parse_regex(const char* input_str, const int is_debug) {
     ast.rights = malloc(output.size * sizeof(int));
     memset(ast.lefts, 0xFF, output.size * sizeof(int));
     memset(ast.rights, 0xFF, output.size * sizeof(int));
-    index_stack = new_dynarr(sizeof(int));
+    index_stack = dynarr_new(sizeof(int));
     for (i = 0; i < output.size; i++) {
         re_token_t* cur_token = &ast.tokens[i];
         switch (cur_token->type) {
@@ -326,7 +314,7 @@ parse_regex(const char* input_str, const int is_debug) {
             break;
         case TYPE_UOP:
         case TYPE_DUP:
-            ast.rights[i] = *(int*) back(&index_stack);
+            ast.lefts[i] = *(int*) back(&index_stack);
             pop(&index_stack);
             append(&index_stack, &i);
             break;
@@ -344,7 +332,7 @@ parse_regex(const char* input_str, const int is_debug) {
         }
 
         if (is_debug) {
-            printf("%d cur_token: ", i); print_re_token(*cur_token);
+            printf("%d cur_token: ", i); re_token_print(*cur_token);
             printf("index_stack:\n");
             for (j = 0; j < index_stack.size; j++) {
                 printf(" %d", *(int*) at(&index_stack, j));
@@ -360,7 +348,7 @@ parse_regex(const char* input_str, const int is_debug) {
         exit(1);
     }
     ast.root = *(int*) index_stack.data;
-    free_dynarr(&index_stack);
+    dynarr_free(&index_stack);
 
     return ast;
 }

@@ -1,6 +1,6 @@
-#include <stdlib.h>
-#include <stdint.h>
 #include "dynarr.h"
+#include <stdint.h>
+#include <stdlib.h>
 
 #ifndef RE_H
 #define RE_H
@@ -42,20 +42,21 @@ enum WILDCARD_NAME {
 /* characters that need to be escaped in bracket expression */
 #define BRACKET_ESC_CHARS "-]"
 
-enum OPERATOR_NAME {
-    OP_PLUS, OP_STAR, OP_OPT, OP_DUP,
-    OP_CONCAT, OP_ALTER
-};
+enum OPERATOR_NAME { OP_PLUS, OP_STAR, OP_OPT, OP_DUP, OP_CONCAT, OP_ALTER };
+
 #define OP_CHARS "+*?{ |"
 #define OP_NAMES_NUM (OP_ALTER + 1)
-extern const char* OP_NAME_STRS[];
 #define IS_UOP(c) (c == '+' || c == '*' || c == '?')
 #define IS_BOP(c) (c == '|')
-extern const int OPERATOR_PRECED[OP_NAMES_NUM];
 /* is a < b in precedence? */
 #define OP_PRECED_LT(a, b) (OPERATOR_PRECED[a] < OPERATOR_PRECED[b])
 
+extern const char* OP_NAME_STRS[];
+
+extern const int OPERATOR_PRECED[OP_NAMES_NUM];
+
 #define DUP_NUM_MAX 0xFF
+#define DUP_NO_MAX 0
 #define DUP_STR_MAX_LEN 3
 #define DUP_START '{'
 #define DUP_SEP ','
@@ -73,7 +74,7 @@ typedef struct re_token {
     uint8_t payload2;
 } re_token_t;
 #define token_size sizeof(re_token_t)
-extern int print_re_token(re_token_t token);
+extern int re_token_print(re_token_t token);
 
 typedef struct re_ast {
     re_token_t* tokens;
