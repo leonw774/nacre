@@ -30,6 +30,7 @@ orderedset_new(int elem_size, int (*cmp_func)(const void* a, const void* b))
         .elem_size = elem_size,
         .size = 0,
         .cap = NEW_SET_CAP,
+        .cmp_func = cmp_func,
         .data = calloc(NEW_SET_CAP, elem_size),
     };
 }
@@ -118,13 +119,13 @@ orderedset_remove(orderedset_t* self, const void* key)
 }
 
 static void
-orderedset_union(orderedset_t* self, orderedset_t* right)
+orderedset_union(orderedset_t* self, const orderedset_t* right)
 {
     void* new_data = NULL;
     int i = 0, j = 0, repeat = 0, elem_size = self->elem_size;
     assert(self->elem_size == right->elem_size);
-    new_data = malloc(self->elem_size * (self->size + right->size));
-    while (i < self->size && j < right->size) {
+    new_data = calloc(self->size + right->size, self->elem_size);
+    while (i < self->size || j < right->size) {
         void* self_elem = self->data + i * elem_size;
         void* right_elem = right->data + j * elem_size;
         int k = i + j - repeat;
@@ -153,16 +154,18 @@ orderedset_union(orderedset_t* self, orderedset_t* right)
     }
     self->size = i + j - repeat;
     self->cap = self->size + right->size;
+    free(self->data);
+    self->data = new_data;
 }
 
 static void
-orderedset_intersect(orderedset_t* self, orderedset_t* right)
+orderedset_intersect(orderedset_t* self, const orderedset_t* right)
 {
     void* new_data = NULL;
     int i = 0, j = 0, repeat = 0, elem_size = self->elem_size;
     assert(self->elem_size == right->elem_size);
-    new_data = malloc(self->elem_size * self->size);
-    while (i < self->size && j < right->size) {
+    new_data = calloc(self->size, self->elem_size);
+    while (i < self->size || j < right->size) {
         void* self_elem = self->data + i * elem_size;
         void* right_elem = right->data + j * elem_size;
         if (j == right->size) {
@@ -185,6 +188,8 @@ orderedset_intersect(orderedset_t* self, orderedset_t* right)
         }
     }
     self->size = repeat;
+    free(self->data);
+    self->data = new_data;
 }
 
 #endif

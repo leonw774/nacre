@@ -20,11 +20,11 @@
 
 dynarr_t tokenization(const char* input_str) {
     enum state { ST_ESC, ST_DUP, ST_BRK, ST_NOR};
-    int i, can_add_concat = 0, cur_state = ST_NOR;
+    int can_add_concat = 0, cur_state = ST_NOR;
     int dup_min = -1, dup_max = -1, dup_str_len = 0, is_dup_have_sep = 0;
     char c;
     char dup_str[DUP_STR_MAX_LEN];
-    size_t input_size = strlen(input_str);
+    size_t i, input_size = strlen(input_str);
     dynarr_t input = dynarr_new(sizeof(re_token_t));
     re_token_t t;
     const re_token_t CONCAT_OP = {

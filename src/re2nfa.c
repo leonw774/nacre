@@ -24,10 +24,12 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         int right_index = re_ast->rights[cur_index];
         re_token_t cur_token = re_ast->tokens[cur_index];
 
-        printf("cur index: %d ", cur_index);
-        printf("left index: %d ", left_index);
-        printf("right index: %d ", right_index);
-        re_token_print(cur_token);
+        if (is_debug) {
+            printf("cur index: %d ", cur_index);
+            printf("left index: %d ", left_index);
+            printf("right index: %d ", right_index);
+            re_token_print(cur_token);
+        }
 
         if (is_visited[cur_index] == 0
             && (left_index != -1 || right_index != -1)) {
@@ -60,40 +62,27 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             int max = cur_token.payload2;
             int i;
             *cur_nfa = epsnfa_deepcopy(left_nfa);
-            printf("A\n");
-            epsnfa_print(cur_nfa);
-            printf("B\n");
             for (i = 1; i < min; i++) {
                 epsnfa_concat(cur_nfa, left_nfa);
-                epsnfa_print(cur_nfa);
             }
             if (max == DUP_NO_MAX) {
                 epsnfa left_star = epsnfa_deepcopy(left_nfa);
-                printf("C\n");
-                epsnfa_print(&left_star);
                 epsnfa_to_star(&left_star);
-                epsnfa_print(&left_star);
                 epsnfa_concat(cur_nfa, &left_star);
-                epsnfa_print(cur_nfa);
                 epsnfa_clear(&left_star);
             } else {
-                epsnfa dup_to_max_opt = epsnfa_deepcopy(left_nfa);
-                epsnfa dup = epsnfa_deepcopy(left_nfa);
-                printf("D\n");
+                epsnfa tail_opt = epsnfa_deepcopy(left_nfa);
                 int j;
                 for (j = 1; j < max - min; j++) {
-                    epsnfa_concat(&dup, left_nfa);
-                    epsnfa_print(&dup);
-                    epsnfa_union(&dup_to_max_opt, &dup);
-                    epsnfa_print(&dup_to_max_opt);
+                    epsnfa head = epsnfa_deepcopy(left_nfa);
+                    epsnfa_to_opt(&tail_opt);
+                    epsnfa_concat(&head, &tail_opt);
+                    epsnfa_clear(&tail_opt);
+                    tail_opt = head;
                 }
-                epsnfa_to_opt(&dup_to_max_opt);
-                epsnfa_print(&dup_to_max_opt);
-                printf("E\n");
-                epsnfa_concat(cur_nfa, &dup_to_max_opt);
-                epsnfa_print(cur_nfa);
-                epsnfa_clear(&dup);
-                epsnfa_clear(&dup_to_max_opt);
+                epsnfa_to_opt(&tail_opt);
+                epsnfa_concat(cur_nfa, &tail_opt);
+                epsnfa_clear(&tail_opt);
             }
             break;
         }
@@ -132,7 +121,9 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             exit(1);
         }
 
-        epsnfa_print(&nfas[cur_index]);
+        if (is_debug) {
+            epsnfa_print(&nfas[cur_index]);
+        }
     }
     result = nfas[re_ast->root];
     free(nfas);

@@ -1,11 +1,11 @@
-FLAGS = -g -I include/ -Wall -Wno-unused-function
-DEPS = src/*.c
-TEST_DEPS = $(wildcard tests/*.c)
-TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(TEST_DEPS))
+FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function
+SRCS = src/*.c
+TEST_SRCS = $(wildcard tests/*.c)
+TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(TEST_SRCS))
 
 test: $(TEST_TARGETS)
 
-tests/%: $(DEPS) tests/%.c
+tests/%: $(SRCS) tests/%.c
 	gcc $(FLAGS) -o $@ $^
 
 clean:

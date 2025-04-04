@@ -267,8 +267,8 @@ epsnfa_match(const epsnfa* self, const char* input_str)
 {
     typedef struct memory {
         /* the position in input string */
-        int pos;
         int cur_state;
+        size_t pos;
         /* is the state visited by current eps path */
         orderedset_t eps_visited;
     } memory_t;
