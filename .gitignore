@@ -57,5 +57,5 @@ dkms.conf
 # Outputs
 tests/
 !tests/*.c
-debug.txt
-nfa-regex
+debug.txt 
+nfaregex

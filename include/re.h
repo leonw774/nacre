@@ -19,9 +19,11 @@ extern const char* TYPE_NAME_STRS[RE_TYPES_NUM];
 
 /* literals that need to be escaped in regex */
 #define LIT_ESC_CHARS "+*?|(){\\"
+
 /* non-printables that need to be escaped in regex */
 #define NONPRINT_ESC_CHARS "nrtvf"
-#define NONPRINT_ESC_CHARS_MAP_TO "\n\r\t\v\f"
+#define NONPRINT_CHARS "\n\r\t\v\f"
+
 /* wildcards that need to be expressed as escaped character */
 #define WC_ESC_CHARS ".dDwWsS"
 #define IS_WC_ESC(c) (strchr(WC_ESC_CHARS, c))

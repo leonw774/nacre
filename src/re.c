@@ -20,12 +20,11 @@ re_token_print(re_token_t token)
     byte_count += printf("{type=%s, ", TYPE_NAME_STRS[token.type]);
     switch (token.type) {
     case TYPE_LIT:
-        nonprint_pos = strchr(NONPRINT_ESC_CHARS_MAP_TO, token.payload);
+        nonprint_pos = strchr(NONPRINT_CHARS, token.payload);
         if (nonprint_pos != NULL) {
             byte_count += printf(
                 "'\\%c'",
-                NONPRINT_ESC_CHARS[(int)(nonprint_pos
-                                         - NONPRINT_ESC_CHARS_MAP_TO)]
+                NONPRINT_ESC_CHARS[(int)(nonprint_pos - NONPRINT_CHARS)]
             );
         } else {
             byte_count += printf("'%c'", token.payload);

@@ -45,7 +45,7 @@ dynarr_t tokenization(const char* input_str) {
                 if (is_nonprint) {
                     t = (re_token_t) {
                         .type = TYPE_LIT,
-                        .payload = NONPRINT_ESC_CHARS_MAP_TO[
+                        .payload = NONPRINT_CHARS[
                             is_nonprint - NONPRINT_ESC_CHARS
                         ]
                     };

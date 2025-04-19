@@ -23,7 +23,7 @@ match_wc(enum WILDCARD_NAME wc, unsigned char byte)
 {
     switch (wc) {
     case WC_ANY:
-        return 1;
+        return byte != '\n';
     case WC_DIGIT:
         return (byte >= '0' && byte <= '9');
     case WC_NONDIGIT:

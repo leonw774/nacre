@@ -51,7 +51,7 @@ epsnfa_print(epsnfa* self)
         for (j = 0; j < transitions->size; j++) {
             transition_t* t = at(transitions, j);
             char* flag_str;
-            char payload_str[8] = {0};
+            char payload_str[8] = { 0 };
             if (t->matcher.flag == MATCHER_FLAG_EPS) {
                 flag_str = "EPS";
             } else if (t->matcher.flag == MATCHER_FLAG_WC) {
@@ -262,7 +262,9 @@ epsnfa_to_opt(epsnfa* self)
     }
 }
 
-int
+/* return n if n is the smallest integer such that input_str[0:n] matches
+   return 0 if no match found */
+size_t
 epsnfa_match(const epsnfa* self, const char* input_str)
 {
     typedef struct memory {
@@ -272,15 +274,16 @@ epsnfa_match(const epsnfa* self, const char* input_str)
         /* is the state visited by current eps path */
         orderedset_t eps_visited;
     } memory_t;
-    unsigned long long input_size = strlen(input_str);
+    size_t matched_len = 0;
     dynarr_t stack = dynarr_new(sizeof(memory_t));
-    int i, res = 0;
+    int i;
     memory_t init_mem = {
         .pos = 0,
         .cur_state = self->start_state,
         .eps_visited = ORDEREDSET(int),
     };
 
+    // size_t input_size = strlen(input_str);
     // printf("input string: %s\n", input_str);
     // printf("input size: %lld\n", input_size);
     // printf("---\n");
@@ -295,11 +298,11 @@ epsnfa_match(const epsnfa* self, const char* input_str)
         // printf("cur state : %*d\n", stack.size+1, cur_mem.cur_state);
         // printf("---\n");
 
-        if (cur_mem.pos == input_size
-            && orderedset_contains(&self->final_states, &cur_mem.cur_state)) {
+        if (orderedset_contains(&self->final_states, &cur_mem.cur_state)) {
             orderedset_free(&cur_mem.eps_visited);
-            res = 1;
-            break;
+            if (cur_mem.pos > matched_len) {
+                matched_len = cur_mem.pos;
+            }
         }
 
         char raw_input = input_str[cur_mem.pos];
@@ -314,10 +317,11 @@ epsnfa_match(const epsnfa* self, const char* input_str)
                 };
                 if (t->matcher.flag == MATCHER_FLAG_EPS) {
                     /* if the matcher is eps, check if the state is visited */
-                    if (orderedset_contains(
-                            &cur_mem.eps_visited, &t->to_state
-                        )) {
-                        /* end this path if visited */
+                    int is_loopback = orderedset_contains(
+                        &cur_mem.eps_visited, &t->to_state
+                    );
+                    /* end this path if visited */
+                    if (is_loopback) {
                         continue;
                     }
                     /* otherwise, add this state to visited */
@@ -334,10 +338,9 @@ epsnfa_match(const epsnfa* self, const char* input_str)
         }
         orderedset_free(&cur_mem.eps_visited);
     }
-
     for (i = 0; i < stack.size; i++) {
         orderedset_free(&((memory_t*)at(&stack, i))->eps_visited);
     }
     dynarr_free(&stack);
-    return res;
+    return matched_len;
 }

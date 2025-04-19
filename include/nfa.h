@@ -3,6 +3,9 @@
 #include "matcher.h"
 #include "transition.h"
 
+#ifndef NFA_H
+#define NFA_H
+
 /* epsilon-NFA */
 typedef struct epsnfa {
     int state_num;
@@ -39,5 +42,8 @@ void epsnfa_to_star(epsnfa* self);
 /* r -> r? */
 void epsnfa_to_opt(epsnfa* self);
 
-/* check if the input string matches the eps-NFA */
-int epsnfa_match(const epsnfa* self, const char* input_str);
+/* return n if n is the smallest integer such that input_str[0:n] matches
+   return -1 if no match found */
+size_t epsnfa_match(const epsnfa* self, const char* input_str);
+
+#endif
