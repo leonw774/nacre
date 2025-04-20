@@ -3,7 +3,7 @@
 #include <string.h>
 
 const char* TYPE_NAME_STRS[] = {
-    "LIT", "WC", "UOP", "DUP", "BOP", "LP", "RP",
+    "LIT", "WC", "UOP", "DUP", "BOP", "LP", "RP", "ANCHOR",
 };
 
 const int OPERATOR_PRECED[] = { 1, 1, 1, 1, 2, 3 };
@@ -50,6 +50,13 @@ re_token_print(re_token_t token)
             printf("{%d,%d}", dup_min, dup_max);
         }
         break;
+    case TYPE_ANCHOR:
+        if (token.payload <= ANCHOR_WEDGE_CHAR) {
+            printf("%c", "^$b"[token.payload]);
+        }
+        break;
+    default:
+        printf("invalid type");
     }
     byte_count += printf("}\n");
     return byte_count;

@@ -12,37 +12,51 @@ enum re_token_type {
     TYPE_DUP, /* duplicator */
     TYPE_BOP, /* binary operators */
     TYPE_LP, /* left and right parenthese */
-    TYPE_RP
+    TYPE_RP,
+    TYPE_ANCHOR, 
 };
-#define RE_TYPES_NUM (TYPE_RP + 1)
+#define RE_TYPES_NUM (TYPE_ANCHOR + 1)
 extern const char* TYPE_NAME_STRS[RE_TYPES_NUM];
 
+
 /* literals that need to be escaped in regex */
-#define LIT_ESC_CHARS "+*?|(){\\"
+#define LIT_ESC_CHARS ".+*?|(){\\"
+#define IS_LIT_ESC(c) (strchr(LIT_ESC_CHARS, c))
 
 /* non-printables that need to be escaped in regex */
 #define NONPRINT_ESC_CHARS "nrtvf"
 #define NONPRINT_CHARS "\n\r\t\v\f"
+#define IS_NONPRINT_ESC(c) (strchr(NONPRINT_ESC_CHARS, c))
 
 /* wildcards that need to be expressed as escaped character */
-#define WC_ESC_CHARS ".dDwWsS"
+#define WC_ESC_CHARS "dDwWsS"
 #define IS_WC_ESC(c) (strchr(WC_ESC_CHARS, c))
-#define IS_NONPRINT_ESC(c) (strchr(NONPRINT_ESC_CHARS, c))
-#define IS_LIT_ESC(c) (strchr(LIT_ESC_CHARS, c))
+
 
 enum WILDCARD_NAME {
-    WC_ANY,
     WC_DIGIT, /* 0-9 */
     WC_NONDIGIT,
     WC_WORD, /* A-Za-z0-9_ */
     WC_NONWORD,
     WC_SPACE, /* ' ', '\t', '\n', '\v', \f', '\r' */
     WC_NONSPACE,
+    WC_ANY,
 };
 #define WC_ANY_CHAR '.'
 
 /* characters that need to be escaped in bracket expression */
 #define BRACKET_ESC_CHARS "-]"
+
+
+enum ANCHOR_NAME {
+    ANCHOR_START,
+    ANCHOR_END,
+    ANCHOR_WEDGE
+};
+#define ANCHOR_WEDGE_CHAR 'b'
+#define ANCHOR_START_CHAR '^'
+#define ANCHOR_END_CHAR '$'
+
 
 enum OPERATOR_NAME { OP_PLUS, OP_STAR, OP_OPT, OP_DUP, OP_CONCAT, OP_ALTER };
 
@@ -57,12 +71,14 @@ extern const char* OP_NAME_STRS[];
 
 extern const int OPERATOR_PRECED[OP_NAMES_NUM];
 
+
 #define DUP_NUM_MAX 0xFF
 #define DUP_NO_MAX 0
 #define DUP_STR_MAX_LEN 3
 #define DUP_START '{'
 #define DUP_SEP ','
 #define DUP_END '}'
+
 
 typedef struct re_token {
     uint8_t type;

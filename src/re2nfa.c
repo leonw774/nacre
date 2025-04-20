@@ -49,6 +49,10 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             nfas[cur_index]
                 = epsnfa_one_transition(BYTE_MATCHER(cur_token.payload));
             break;
+        case TYPE_ANCHOR:
+            nfas[cur_index]
+                = epsnfa_one_transition(ANCHOR_MATCHER(cur_token.payload));
+            break;
         case TYPE_DUP: {
             /* expand the dup operation with concat, alter, opt, and star.
                for example:

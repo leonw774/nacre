@@ -1,6 +1,6 @@
 #include "dynarr.h"
-#include "orderedset.h"
 #include "matcher.h"
+#include "orderedset.h"
 #include "transition.h"
 
 #ifndef NFA_H
@@ -44,6 +44,8 @@ void epsnfa_to_opt(epsnfa* self);
 
 /* return n if n is the smallest integer such that input_str[0:n] matches
    return -1 if no match found */
-size_t epsnfa_match(const epsnfa* self, const char* input_str);
+size_t epsnfa_match(
+    const epsnfa* self, const char* input_str, const int is_start_behind
+);
 
 #endif

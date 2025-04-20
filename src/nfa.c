@@ -265,7 +265,9 @@ epsnfa_to_opt(epsnfa* self)
 /* return n if n is the smallest integer such that input_str[0:n] matches
    return 0 if no match found */
 size_t
-epsnfa_match(const epsnfa* self, const char* input_str)
+epsnfa_match(
+    const epsnfa* self, const char* input_str, const anchor_byte behind_input
+)
 {
     typedef struct memory {
         /* the position in input string */
@@ -275,6 +277,7 @@ epsnfa_match(const epsnfa* self, const char* input_str)
         orderedset_t eps_visited;
     } memory_t;
     size_t matched_len = 0;
+    size_t input_size = strlen(input_str);
     dynarr_t stack = dynarr_new(sizeof(memory_t));
     int i;
     memory_t init_mem = {
@@ -283,7 +286,6 @@ epsnfa_match(const epsnfa* self, const char* input_str)
         .eps_visited = ORDEREDSET(int),
     };
 
-    // size_t input_size = strlen(input_str);
     // printf("input string: %s\n", input_str);
     // printf("input size: %lld\n", input_size);
     // printf("---\n");
@@ -305,17 +307,34 @@ epsnfa_match(const epsnfa* self, const char* input_str)
             }
         }
 
-        char raw_input = input_str[cur_mem.pos];
         dynarr_t* cur_transitions
             = at(&self->state_transitions, cur_mem.cur_state);
         for (i = 0; i < cur_transitions->size; i++) {
             transition_t* t = at(cur_transitions, i);
-            if (match_byte(t->matcher, raw_input)) {
+
+            int is_matched = 0;
+            if (t->matcher.flag & MATCHER_FLAG_ANCHOR) {
+                anchor_byte behind_byte, ahead_byte;
+
+                behind_byte = (cur_mem.pos == 0) ? behind_input
+                                                 : input_str[cur_mem.pos - 1];
+                ahead_byte = (cur_mem.pos >= input_size)
+                    ? ANCHOR_BYTE_END
+                    : input_str[cur_mem.pos];
+                is_matched
+                    = match_anchor(t->matcher.payload, behind_byte, ahead_byte);
+            } else if (cur_mem.pos >= input_size) {
+                continue;
+            } else {
+                is_matched = match_byte(t->matcher, input_str[cur_mem.pos]);
+            }
+
+            if (is_matched) {
                 memory_t next_mem = {
                     .pos = cur_mem.pos,
                     .cur_state = t->to_state,
                 };
-                if (t->matcher.flag == MATCHER_FLAG_EPS) {
+                if (t->matcher.flag & MATCHER_FLAG_EPS) {
                     /* if the matcher is eps, check if the state is visited */
                     int is_loopback = orderedset_contains(
                         &cur_mem.eps_visited, &t->to_state

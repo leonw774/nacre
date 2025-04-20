@@ -51,17 +51,12 @@ find_matches(const epsnfa* nfa, const char* buffer)
     size_t line_num = 1, col_num = 1, tmp, check_newline_to;
     for (start = 0; start < len; start += match_length) {
         const char* substring = buffer + start;
-        if (!substring) {
-            fprintf(stderr, "Error: Memory allocation failed.\n");
-            exit(1);
-        }
-        match_length = epsnfa_match(nfa, substring);
+        match_length = epsnfa_match(
+            nfa, substring, start == 0 ? ANCHOR_BYTE_START : buffer[start - 1]
+        );
         if (match_length) {
-            size_t print_start = start;
-            while (print_start != 0 && buffer[print_start - 1] != '\n') {
-                print_start--;
-            }
-            size_t print_end = start + match_length;
+            size_t print_start = start - col_num + 1;
+            size_t print_end = start + match_length - 1;
             while (buffer[print_end] != '\n') {
                 print_end++;
             }
@@ -77,8 +72,7 @@ find_matches(const epsnfa* nfa, const char* buffer)
             start++;
         }
         /* update line and col between start to start + match_length */
-        check_newline_to
-            = start + (match_length == 0 ? 1 : match_length);
+        check_newline_to = start + (match_length == 0 ? 1 : match_length);
         for (tmp = start; tmp < check_newline_to; tmp++) {
             if (tmp && buffer[tmp - 1] == '\n') {
                 line_num++;
@@ -90,16 +84,59 @@ find_matches(const epsnfa* nfa, const char* buffer)
     }
 }
 
+void
+find_matches_multiline(const epsnfa* nfa, const char* buffer)
+{
+    size_t line_start = 0, match_length, len = strlen(buffer);
+    size_t line_num = 1;
+
+    while (line_start < len) {
+        char* line;
+        size_t i, line_end = line_start;
+        while (buffer[line_end] != '\0' && buffer[line_end] != '\n') {
+            line_end++;
+        }
+        line = malloc(line_end - line_start + 1);
+        strncpy(line, buffer + line_start, line_end - line_start);
+        line[line_end - line_start] = '\0';
+        for (i = 0; i < line_end - line_start; i++) {
+            match_length = epsnfa_match(
+                nfa, line + i, i == 0 ? ANCHOR_BYTE_START : line[i]
+            );
+            if (match_length) {
+                print_match(line, line_num, i + 1, match_length);
+                break;
+            }
+        }
+        line_num++;
+        line_start = line_end + 1;
+        free(line);
+    }
+}
+
 int
 main(int argc, char* argv[])
 {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s {re} {input_file}\n", argv[0]);
+    const char* multiline_flag = NULL;
+    const char* regex = NULL;
+    const char* input_file = NULL;
+
+    if (argc != 3 && argc != 4) {
+        fprintf(stderr, "Usage: %s [-m] {re} {input_file}\n", argv[0]);
         return 1;
     }
-
-    const char* regex = argv[1];
-    const char* input_file = argv[2];
+    if (argc == 3) {
+        regex = argv[1];
+        input_file = argv[2];
+    } else {
+        multiline_flag = argv[1];
+        if (strcmp(multiline_flag, "-m") != 0) {
+            fprintf(stderr, "Usage: %s [-m] {re} {input_file}\n", argv[0]);
+            return 1;
+        }
+        regex = argv[2];
+        input_file = argv[3];
+    }
 
     // Parse the regex into an AST
     re_ast_t ast = parse_regex(regex, 0);
@@ -136,7 +173,11 @@ main(int argc, char* argv[])
             buffer[MAX_BUFFER_SIZE]
                 = '\0'; // Ensure null-termination for full buffer
         }
-        find_matches(&nfa, buffer);
+        if (multiline_flag) {
+            find_matches_multiline(&nfa, buffer);
+        } else {
+            find_matches(&nfa, buffer);
+        }
     }
 
     // Clean up
