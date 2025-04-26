@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef IS_DEBUG
+#define IS_DEBUG_FLAG 1
+#else
+#define IS_DEBUG_FLAG 0
+#endif
+
 void
 print_match(
     const char* buffer, size_t start_line, size_t start_col, size_t length
@@ -101,7 +107,7 @@ find_matches_multiline(const epsnfa* nfa, const char* buffer)
         line[line_end - line_start] = '\0';
         for (i = 0; i < line_end - line_start; i++) {
             match_length = epsnfa_match(
-                nfa, line + i, i == 0 ? ANCHOR_BYTE_START : line[i]
+                nfa, line + i, i == 0 ? ANCHOR_BYTE_START : line[i - 1]
             );
             if (match_length) {
                 print_match(line, line_num, i + 1, match_length);
@@ -139,14 +145,14 @@ main(int argc, char* argv[])
     }
 
     // Parse the regex into an AST
-    re_ast_t ast = parse_regex(regex, 0);
+    re_ast_t ast = parse_regex(regex, IS_DEBUG_FLAG);
     if (ast.size == 0) {
         fprintf(stderr, "Error: Failed to parse regex.\n");
         return 1;
     }
 
     // Convert the AST to an epsilon-NFA
-    epsnfa nfa = re2nfa(&ast, 0);
+    epsnfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
 
     // Open the input file
     FILE* file = fopen(input_file, "r");
@@ -155,9 +161,9 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    // Read the file into a buffer with a size limit (1MB) and find matches
+    // Read the file into a buffer with a size limit (128MB) and find matches
     // byte-by-byte
-    const size_t MAX_BUFFER_SIZE = 1024 * 1024; // 1MB
+    const size_t MAX_BUFFER_SIZE = 128 * 1024 * 1024; // 128MB
     char* buffer = malloc(MAX_BUFFER_SIZE + 1);
     if (!buffer) {
         perror("Error allocating memory for buffer");

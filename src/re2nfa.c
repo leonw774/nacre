@@ -56,9 +56,9 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         case TYPE_DUP: {
             /* expand the dup operation with concat, alter, opt, and star.
                for example:
-                - "a{2,5}" become "aa(a(a(a)?)?)?"
-                - "a{3,}" become "aaa(a*)"
-                - "a{4}" become "aaaa"
+               - "a{3,}" become "aaa(a*)"
+               - "a{4}" become "aaaa"
+               - "a{2,5}" become "aa(a(a(a)?)?)?"
             */
             epsnfa* cur_nfa = &nfas[cur_index];
             epsnfa* left_nfa = &nfas[left_index];
@@ -70,10 +70,14 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
                 epsnfa_concat(cur_nfa, left_nfa);
             }
             if (max == DUP_NO_MAX) {
+                /* at least min depulication */
                 epsnfa left_star = epsnfa_deepcopy(left_nfa);
                 epsnfa_to_star(&left_star);
                 epsnfa_concat(cur_nfa, &left_star);
                 epsnfa_clear(&left_star);
+            } else if (min == max) {
+                /* extact duplication */
+                /* do nothing */
             } else {
                 epsnfa tail_opt = epsnfa_deepcopy(left_nfa);
                 int j;

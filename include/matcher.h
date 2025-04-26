@@ -19,8 +19,12 @@ typedef struct matcher {
     uint8_t payload;
 } matcher_t;
 
+typedef int anchor_byte;
+#define ANCHOR_BYTE_START ((anchor_byte) - 1)
+#define ANCHOR_BYTE_END ((anchor_byte) - 2)
+
 static inline int
-isword(unsigned char byte)
+isword(anchor_byte byte)
 {
     return (byte >= 'A' && byte <= 'Z') || (byte >= 'a' && byte <= 'z')
         || (byte >= '0' && byte <= '9') || (byte == '_');
@@ -65,19 +69,12 @@ match_byte(matcher_t m, unsigned char byte)
     );
 }
 
-typedef int anchor_byte;
-#define ANCHOR_BYTE_START ((anchor_byte) - 1)
-#define ANCHOR_BYTE_END ((anchor_byte) - 2)
-
 static inline int
-match_anchor(
-    enum ANCHOR_NAME anchor, anchor_byte behind_byte, anchor_byte ahead_byte
-)
+match_anchor(enum ANCHOR_NAME anchor, anchor_byte behind, anchor_byte ahead)
 {
-    return (anchor == ANCHOR_START && behind_byte == ANCHOR_BYTE_START)
-        || (anchor == ANCHOR_END && ahead_byte == ANCHOR_BYTE_END)
-        || (anchor == ANCHOR_WEDGE
-            && (isword(behind_byte) != isword(ahead_byte)));
+    return (anchor == ANCHOR_START && behind == ANCHOR_BYTE_START)
+        || (anchor == ANCHOR_END && ahead == ANCHOR_BYTE_END)
+        || (anchor == ANCHOR_WEDGE && (isword(behind) != isword(ahead)));
 }
 
 #define EPS_MATCHER()                                                          \

@@ -52,23 +52,36 @@ epsnfa_print(epsnfa* self)
             transition_t* t = at(transitions, j);
             char* flag_str;
             char payload_str[8] = { 0 };
-            if (t->matcher.flag == MATCHER_FLAG_EPS) {
-                flag_str = "EPS";
-            } else if (t->matcher.flag == MATCHER_FLAG_WC) {
+            if (t->matcher.flag & MATCHER_FLAG_EPS) {
+                if (t->matcher.flag & MATCHER_FLAG_ANCHOR) {
+                    flag_str = "ANCH";
+                    if (t->matcher.payload == ANCHOR_START) {
+                        payload_str[0] = ANCHOR_START_CHAR;
+                    } else if (t->matcher.payload == ANCHOR_END) {
+                        payload_str[0] = ANCHOR_END_CHAR;
+                    } else if (t->matcher.flag) {
+                        payload_str[0] = ANCHOR_WEDGE_CHAR;
+                    }
+                    payload_str[1] = '\0';
+                } else {
+                    flag_str = "EPS";
+                }
+            } else if (t->matcher.flag & MATCHER_FLAG_WC) {
                 flag_str = "WC";
-                sprintf(payload_str, " %d", t->matcher.payload);
-            } else if (t->matcher.flag == MATCHER_FLAG_BYTE) {
+                sprintf(payload_str, "%d", t->matcher.payload);
+            } else if (t->matcher.flag & MATCHER_FLAG_BYTE) {
                 flag_str = "BYTE";
                 if (isprint(t->matcher.payload)) {
-                    sprintf(payload_str, " '%c'", t->matcher.payload);
+                    sprintf(payload_str, "'%c'", t->matcher.payload);
                 } else {
-                    sprintf(payload_str, " \\x%x", t->matcher.payload);
+                    sprintf(payload_str, "\\x%x", t->matcher.payload);
                 }
             } else {
                 flag_str = "UNK";
+                sprintf(payload_str, "%d", t->matcher.flag);
             }
             byte_count += printf(
-                "  %d --> %d: [%s%s]\n", i, t->to_state, flag_str, payload_str
+                "  %d --> %d: [%s %s]\n", i, t->to_state, flag_str, payload_str
             );
         }
     }
@@ -293,17 +306,18 @@ epsnfa_match(
     append(&stack, &init_mem);
     while (stack.size > 0) {
         memory_t cur_mem = *(memory_t*)back(&stack); /* copy to stack */
+        size_t cur_pos = cur_mem.pos;
         pop(&stack);
 
-        // printf("input pos : %d\n", cur_mem.pos);
+        // printf("input pos : %d\n", cur_pos);
         // printf("stack size: %d\n", stack.size+1);
         // printf("cur state : %*d\n", stack.size+1, cur_mem.cur_state);
         // printf("---\n");
 
         if (orderedset_contains(&self->final_states, &cur_mem.cur_state)) {
             orderedset_free(&cur_mem.eps_visited);
-            if (cur_mem.pos > matched_len) {
-                matched_len = cur_mem.pos;
+            if (cur_pos > matched_len) {
+                matched_len = cur_pos;
             }
         }
 
@@ -311,30 +325,27 @@ epsnfa_match(
             = at(&self->state_transitions, cur_mem.cur_state);
         for (i = 0; i < cur_transitions->size; i++) {
             transition_t* t = at(cur_transitions, i);
-
+            matcher_t m = t->matcher;
             int is_matched = 0;
-            if (t->matcher.flag & MATCHER_FLAG_ANCHOR) {
-                anchor_byte behind_byte, ahead_byte;
-
-                behind_byte = (cur_mem.pos == 0) ? behind_input
-                                                 : input_str[cur_mem.pos - 1];
-                ahead_byte = (cur_mem.pos >= input_size)
+            if (m.flag & MATCHER_FLAG_ANCHOR) {
+                anchor_byte behind
+                    = (cur_pos == 0) ? behind_input : input_str[cur_pos - 1];
+                anchor_byte ahead = (cur_pos >= input_size - 1)
                     ? ANCHOR_BYTE_END
-                    : input_str[cur_mem.pos];
-                is_matched
-                    = match_anchor(t->matcher.payload, behind_byte, ahead_byte);
-            } else if (cur_mem.pos >= input_size) {
+                    : input_str[cur_pos];
+                is_matched = match_anchor(m.payload, behind, ahead);
+            } else if (cur_pos >= input_size - 1) {
                 continue;
             } else {
-                is_matched = match_byte(t->matcher, input_str[cur_mem.pos]);
+                is_matched = match_byte(m, input_str[cur_pos]);
             }
 
             if (is_matched) {
                 memory_t next_mem = {
-                    .pos = cur_mem.pos,
+                    .pos = cur_pos,
                     .cur_state = t->to_state,
                 };
-                if (t->matcher.flag & MATCHER_FLAG_EPS) {
+                if (m.flag & MATCHER_FLAG_EPS) {
                     /* if the matcher is eps, check if the state is visited */
                     int is_loopback = orderedset_contains(
                         &cur_mem.eps_visited, &t->to_state

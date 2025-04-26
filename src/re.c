@@ -6,11 +6,18 @@ const char* TYPE_NAME_STRS[] = {
     "LIT", "WC", "UOP", "DUP", "BOP", "LP", "RP", "ANCHOR",
 };
 
-const int OPERATOR_PRECED[] = { 1, 1, 1, 1, 2, 3 };
+const char* LIT_ESC_CHARS = ".+*?|(){\\";
+const char* NONPRINT_ESC_CHARS = "nrtvf";
+const char* NONPRINT_ESC_CHARS_TO = "\n\r\t\v\f";
+const char* WC_ESC_CHARS = "dDwWsS";
+const char* BRACKET_ESC_CHARS = "-]nrtvf";
+const char* BRACKET_ESC_CHARS_TO = "-]\n\r\t\v\f";
 
+const char* OP_CHARS = "+*?{ |";
 const char* OP_NAME_STRS[] = {
     "PLUS", "STAR", "OPT", "DUP", "CONCAT", "ALTER",
 };
+const int OP_PRECED[] = { 1, 1, 1, 1, 2, 3 };
 
 int
 re_token_print(re_token_t token)
@@ -20,11 +27,11 @@ re_token_print(re_token_t token)
     byte_count += printf("{type=%s, ", TYPE_NAME_STRS[token.type]);
     switch (token.type) {
     case TYPE_LIT:
-        nonprint_pos = strchr(NONPRINT_CHARS, token.payload);
+        nonprint_pos = strchr(NONPRINT_ESC_CHARS_TO, token.payload);
         if (nonprint_pos != NULL) {
             byte_count += printf(
                 "'\\%c'",
-                NONPRINT_ESC_CHARS[(int)(nonprint_pos - NONPRINT_CHARS)]
+                NONPRINT_ESC_CHARS[(int)(nonprint_pos - NONPRINT_ESC_CHARS_TO)]
             );
         } else {
             byte_count += printf("'%c'", token.payload);
@@ -54,6 +61,9 @@ re_token_print(re_token_t token)
         if (token.payload <= ANCHOR_WEDGE_CHAR) {
             printf("%c", "^$b"[token.payload]);
         }
+        break;
+    case TYPE_LP:
+    case TYPE_RP:
         break;
     default:
         printf("invalid type");
