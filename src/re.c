@@ -13,11 +13,11 @@ const char* WC_ESC_CHARS = "dDwWsS";
 const char* BRACKET_ESC_CHARS = "-]nrtvf";
 const char* BRACKET_ESC_CHARS_TO = "-]\n\r\t\v\f";
 
-const char* OP_CHARS = "+*?{ |";
+const char* OP_CHARS = "+*?{ ||";
 const char* OP_NAME_STRS[] = {
-    "PLUS", "STAR", "OPT", "DUP", "CONCAT", "ALTER",
+    "PLUS", "STAR", "OPT", "DUP", "CONCAT", "ALTER", "BRACKET_ALTER",
 };
-const int OP_PRECED[] = { 1, 1, 1, 1, 2, 3 };
+const int OP_PRECED[] = { 1, 1, 1, 1, 2, 3, 3 };
 
 int
 re_token_print(re_token_t token)

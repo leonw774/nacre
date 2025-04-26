@@ -20,8 +20,8 @@ typedef struct matcher {
 } matcher_t;
 
 typedef int anchor_byte;
-#define ANCHOR_BYTE_START ((anchor_byte) - 1)
-#define ANCHOR_BYTE_END ((anchor_byte) - 2)
+#define ANCHOR_BYTE_START ((anchor_byte)(-1))
+#define ANCHOR_BYTE_END ((anchor_byte)(-2))
 
 static inline int
 isword(anchor_byte byte)

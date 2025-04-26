@@ -11,6 +11,8 @@
 #define IS_DEBUG_FLAG 0
 #endif
 
+const int MAX_BUFFER_SIZE = 1024;
+
 void
 print_match(
     const char* buffer, size_t start_line, size_t start_col, size_t length
@@ -63,16 +65,18 @@ find_matches(const epsnfa* nfa, const char* buffer)
         if (match_length) {
             size_t print_start = start - col_num + 1;
             size_t print_end = start + match_length - 1;
+            size_t print_size;
+            char print_buffer[MAX_BUFFER_SIZE];
             while (buffer[print_end] != '\n') {
                 print_end++;
             }
-            char* print_buffer = malloc(print_end - print_start + 1);
-            strncpy(
-                print_buffer, buffer + print_start, print_end - print_start
-            );
-            print_buffer[print_end - print_start] = '\0';
+            print_size = print_end - print_start;
+            if (print_size >= MAX_BUFFER_SIZE) {
+                print_size = MAX_BUFFER_SIZE - 1;
+            }
+            strncpy(print_buffer, buffer + print_start, print_size);
+            print_buffer[print_size] = '\0';
             print_match(print_buffer, line_num, col_num, match_length);
-            free(print_buffer);
         } else {
             /* start still need to increase by one */
             start++;

@@ -15,13 +15,13 @@ epsnfa_one_transition(matcher_t m)
     epsnfa res = {
         .state_num = 2,
         .start_state = 0,
-        .final_states = ORDEREDSET(int),
+        .final_state = 1,
         .state_transitions = dynarr_new(sizeof(dynarr_t)),
     };
     dynarr_t transition_set_0 = dynarr_new(sizeof(transition_t)),
              transition_set_1 = dynarr_new(sizeof(transition_t));
     transition_t t;
-    orderedset_add(&res.final_states, &init_final_state);
+    res.final_state = init_final_state;
     append(&res.state_transitions, &transition_set_0);
     append(&res.state_transitions, &transition_set_1);
     t = (transition_t) { .matcher = m, .to_state = 1 };
@@ -35,16 +35,10 @@ epsnfa_print(epsnfa* self)
     int i, byte_count = 0;
     byte_count += printf("--- PRINT EPSNFA ---\n");
     byte_count += printf(
-        "Number of state: %d\nStarting state: %d\nFinal states: ",
-        self->state_num, self->start_state
+        "Number of state: %d\nStarting state: %d\nFinal states: %d\n"
+        "Transitions:\nstateDiagram\n",
+        self->state_num, self->start_state, self->final_state
     );
-    for (i = 0; i < self->final_states.size; i++) {
-        byte_count += printf("%d", ((int*)self->final_states.data)[i]);
-        if (i != self->final_states.size - 1) {
-            byte_count += printf(", ");
-        }
-    }
-    byte_count += printf("\nTransitions:\nstateDiagram\n");
     for (i = 0; i < self->state_transitions.size; i++) {
         int j;
         dynarr_t* transitions = at(&self->state_transitions, i);
@@ -86,6 +80,7 @@ epsnfa_print(epsnfa* self)
         }
     }
     byte_count += printf("--------------------\n");
+    fflush(stdout);
     return byte_count;
 }
 
@@ -99,7 +94,7 @@ epsnfa_clear(epsnfa* self)
     dynarr_free(&self->state_transitions);
     self->state_num = 0;
     self->start_state = -1;
-    orderedset_free(&self->final_states);
+    self->final_state = -1;
 }
 
 void
@@ -134,7 +129,7 @@ epsnfa_deepcopy(const epsnfa* self)
     epsnfa copy = {
         .state_num = self->state_num,
         .start_state = self->start_state,
-        .final_states = orderedset_copy(&self->final_states),
+        .final_state = self->final_state,
         .state_transitions = dynarr_new(sizeof(dynarr_t)),
     };
     for (i = 0; i < self->state_transitions.size; i++) {
@@ -152,16 +147,15 @@ epsnfa_deepcopy(const epsnfa* self)
 void
 epsnfa_concat(epsnfa* self, const epsnfa* right)
 {
-    int i;
-    orderedset_t new_final_states;
+    int i, j;
+    transition_t new_t;
     /* append right's transition to self */
     for (i = 0; i < right->state_transitions.size; i++) {
         dynarr_t* from_transition_set = at(&right->state_transitions, i);
         dynarr_t to_transition_set = dynarr_new(sizeof(transition_t));
-        int j;
         for (j = 0; j < from_transition_set->size; j++) {
             transition_t* t = at(from_transition_set, j);
-            transition_t new_t = {
+            new_t = (transition_t) {
                 .matcher = t->matcher,
                 .to_state = self->state_num + t->to_state,
             };
@@ -169,38 +163,31 @@ epsnfa_concat(epsnfa* self, const epsnfa* right)
         }
         append(&self->state_transitions, &to_transition_set);
     }
-    /* transform final states of right to new by adding self->state_num */
-    new_final_states = orderedset_copy(&right->final_states);
-    for (i = 0; i < new_final_states.size; i++) {
-        ((int*)new_final_states.data)[i] += self->state_num;
+    /* transition to self's final become to right's start */
+    for (i = 0; i < self->state_transitions.size; i++) {
+        dynarr_t* transition_set = at(&self->state_transitions, i);
+        for (j = 0; j < transition_set->size; j++) {
+            transition_t* t = at(transition_set, j);
+            if (t->to_state == self->final_state) {
+                t->to_state = self->state_num + right->start_state;
+            }
+        }
     }
-    /* add epsilon transition from self's final states to right's start state */
-    for (i = 0; i < self->final_states.size; i++) {
-        int final = ((int*)self->final_states.data)[i];
-        dynarr_t* from_transition_set = at(&self->state_transitions, final);
-        transition_t t = {
-            .matcher = EPS_MATCHER(),
-            .to_state = self->state_num + right->start_state,
-        };
-        append(from_transition_set, &t);
-    }
-    /* update final states to new */
-    orderedset_free(&self->final_states);
-    self->final_states = new_final_states;
-    /* update state num */
+    /* transform self's final to right's final by adding self->state_num */
+    self->final_state = right->final_state + self->state_num;
     self->state_num += right->state_num;
 }
 
 void
 epsnfa_union(epsnfa* self, const epsnfa* right)
 {
-    int i;
-    orderedset_t new_final_states;
+    int i, j;
+    int new_start = self->state_num + right->state_num;
+    int new_final = new_start + 1;
     /* append right's transition to self */
     for (i = 0; i < right->state_transitions.size; i++) {
         dynarr_t* from_transition_set = at(&right->state_transitions, i);
         dynarr_t to_transition_set = dynarr_new(sizeof(transition_t));
-        int j;
         for (j = 0; j < from_transition_set->size; j++) {
             transition_t* t = at(from_transition_set, j);
             transition_t new_t = {
@@ -211,68 +198,72 @@ epsnfa_union(epsnfa* self, const epsnfa* right)
         }
         append(&self->state_transitions, &to_transition_set);
     }
-    /* transform final states of right to new by adding self->state_num */
-    new_final_states = orderedset_copy(&right->final_states);
-    for (i = 0; i < new_final_states.size; i++) {
-        ((int*)new_final_states.data)[i] += self->state_num;
-    }
-    /* add right's final states to new final states */
-    orderedset_union(&self->final_states, &new_final_states);
-    orderedset_free(&new_final_states);
-    /* add new start state and update state num */
+    /* add transition set for new state */
     {
-        int right_start_state_in_new = self->state_num + right->start_state;
-        self->state_num += right->state_num;
-        /* add new start state that eps-transition to self and right's start */
-        epsnfa_add_state(self);
-        /* add new transition from new start state to old start state */
-        epsnfa_add_transition(
-            self, self->state_num - 1, EPS_MATCHER(), self->start_state
-        );
-        epsnfa_add_transition(
-            self, self->state_num - 1, EPS_MATCHER(), right_start_state_in_new
-        );
-        self->start_state = self->state_num - 1;
+        dynarr_t new_start_transition_set = dynarr_new(sizeof(transition_t));
+        dynarr_t new_final_transition_set = dynarr_new(sizeof(transition_t));
+        append(&self->state_transitions, &new_start_transition_set);
+        append(&self->state_transitions, &new_final_transition_set);
     }
+    /* add eps from new start to self start and right start */
+    epsnfa_add_transition(self, new_start, EPS_MATCHER(), self->start_state);
+    epsnfa_add_transition(
+        self, new_start, EPS_MATCHER(), right->start_state + self->state_num
+    );
+    /* add eps from self final and right final to new final */
+    epsnfa_add_transition(self, self->final_state, EPS_MATCHER(), new_final);
+    epsnfa_add_transition(
+        self, right->final_state + self->state_num, EPS_MATCHER(), new_final
+    );
+    /* set new start and final state */
+    self->final_state = new_final;
+    self->start_state = new_start;
+    self->state_num += right->state_num + 2;
+}
+
+void
+epsnfa_bracket_union(epsnfa* self, const epsnfa* right)
+{
+    assert(right->state_transitions.size == 2);
+    dynarr_t* right_start_transition_set
+        = at(&right->state_transitions, right->start_state);
+    assert(right_start_transition_set->size == 1);
+    epsnfa_add_transition(
+        self, self->start_state,
+        ((transition_t*)at(right_start_transition_set, 0))->matcher,
+        self->final_state
+    );
 }
 
 void
 epsnfa_to_star(epsnfa* self)
 {
-    int i;
     int star_start = self->state_num;
     int star_final = self->state_num + 1;
     epsnfa_add_state(self);
     epsnfa_add_state(self);
-    /* 1. add eps from star-start to self-start */
+    /* add eps from star-start to self-start */
     epsnfa_add_transition(self, star_start, EPS_MATCHER(), self->start_state);
-    for (i = 0; i < self->final_states.size; i++) {
-        int final = ((int*)self->final_states.data)[i];
-        /* 2. add eps from self-finals to self-start */
-        epsnfa_add_transition(self, final, EPS_MATCHER(), self->start_state);
-        /* 3. add eps from self-finals to star-final */
-        epsnfa_add_transition(self, final, EPS_MATCHER(), star_final);
-    }
-    /* 4. add eps from star-start to star-final */
+    /* add eps from self-finals to self-start */
+    epsnfa_add_transition(
+        self, self->final_state, EPS_MATCHER(), self->start_state
+    );
+    /* add eps from self-finals to star-final */
+    epsnfa_add_transition(self, self->final_state, EPS_MATCHER(), star_final);
+    /* add eps from star-start to star-final */
     epsnfa_add_transition(self, star_start, EPS_MATCHER(), star_final);
-    /* 5. set new start and final state */
+    /* set new start and final state */
     self->start_state = star_start;
-    orderedset_free(&self->final_states);
-    self->final_states = ORDEREDSET(int);
-    orderedset_add(&self->final_states, &star_final);
+    self->final_state = star_final;
 }
 
 void
 epsnfa_to_opt(epsnfa* self)
 {
-    /* add an eps-transition from start state to each final state */
-    int i;
-    for (i = 0; i < self->final_states.size; i++) {
-        epsnfa_add_transition(
-            self, self->start_state, EPS_MATCHER(),
-            ((int*)self->final_states.data)[i]
-        );
-    }
+    /* add an eps-transition from start state to final state */
+    epsnfa_add_transition(
+        self, self->start_state, EPS_MATCHER(), self->final_state
+    );
 }
 
 /* return n if n is the smallest integer such that input_str[0:n] matches
@@ -314,7 +305,7 @@ epsnfa_match(
         // printf("cur state : %*d\n", stack.size+1, cur_mem.cur_state);
         // printf("---\n");
 
-        if (orderedset_contains(&self->final_states, &cur_mem.cur_state)) {
+        if (self->final_state == cur_mem.cur_state) {
             orderedset_free(&cur_mem.eps_visited);
             if (cur_pos > matched_len) {
                 matched_len = cur_pos;

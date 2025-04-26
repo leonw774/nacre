@@ -75,7 +75,7 @@ parse_bracket_expr(const char* input_str)
     for (j = 0; j < charset.size; j++) {
         re_token_t t;
         if (j != 0) {
-            t = (re_token_t) { .type = TYPE_BOP, .payload = OP_ALTER };
+            t = (re_token_t) { .type = TYPE_BOP, .payload = OP_BRK_ALTER };
             append(&output, &t);
         }
         t = (re_token_t) {
@@ -84,7 +84,7 @@ parse_bracket_expr(const char* input_str)
         };
         append(&output, &t);
     }
-
+    orderedset_free(&charset);
     return output;
 }
 
@@ -228,20 +228,17 @@ tokenization(const char* input_str)
                         append(&input, &CONCAT_OP);
                     }
 
-                    t = (re_token_t) {
-                        .type = TYPE_LP,
-                    };
+                    t = (re_token_t) { .type = TYPE_LP };
                     append(&input, &t);
                     for (j = 0; j < alter_exprs.size; j++) {
                         append(&input, at(&alter_exprs, j));
                     }
-                    t = (re_token_t) {
-                        .type = TYPE_RP,
-                    };
+                    t = (re_token_t) { .type = TYPE_RP };
                     append(&input, &t);
 
                     can_add_concat = 1;
                     cur_state = ST_NORM;
+                    dynarr_free(&alter_exprs);
                 }
                 cur_state = ST_NORM;
             } else {

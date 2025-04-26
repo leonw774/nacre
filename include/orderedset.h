@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,26 +7,47 @@
 #ifndef ORDEREDSET_H
 #define ORDEREDSET_H
 
-#define NEW_SET_CAP 4
+#define NEW_SET_CAP 2
 
 typedef struct orderedset {
     int elem_size;
     int size;
     int cap;
-    /* can be NULL to use default (cmp_int) */
+    /* can be NULL to use default (default_cmp) */
     int (*cmp_func)(const void* a, const void* b);
     void* data;
 } orderedset_t;
 
 static int
-cmp_int(const void* a, const void* b)
+default_cmp(const void* a, const void* b, const int elem_size)
 {
-    return *(int*)a - *(int*)b;
+    if (elem_size == 1) {
+        return (*(int8_t*)a) - (*(int8_t*)b);
+    } else if (elem_size == 2) {
+        return (*(int16_t*)a) - (*(int16_t*)b);
+    } else if (elem_size == 4) {
+        return (*(int32_t*)a) - (*(int32_t*)b);
+    } else if (elem_size == 8) {
+        return (*(int64_t*)a) - (*(int64_t*)b);
+    } else if (elem_size < 8) {
+        int64_t mask = (1 < (elem_size * 8 - 1)) - 1;
+        return (*(int64_t*)a & mask) - (*(int64_t*)b & mask);
+    } else {
+        printf("default_cmp: unsupported elem_size: %d\n", elem_size);
+        exit(1);
+    }
 }
 
 static orderedset_t
 orderedset_new(int elem_size, int (*cmp_func)(const void* a, const void* b))
 {
+    if (elem_size > 8 && cmp_func == NULL) {
+        printf(
+            "orderedset_new: you should provide your cmp function if elem_size "
+            "> 8\n"
+        );
+        exit(1);
+    }
     return (orderedset_t) {
         .elem_size = elem_size,
         .size = 0,
@@ -57,6 +79,34 @@ orderedset_copy(const orderedset_t* self)
     return copy;
 }
 
+/* found the index i such that data[i-1] <= key < data[i] */
+static int
+orderedset_find_upperbound_index(
+    const orderedset_t* self, const void* key, int* found
+)
+{
+    int low = 0, high = self->size;
+    int mid, cmp;
+    *found = 0;
+    while (low < high) {
+        mid = (low + high) / 2;
+        cmp = self->cmp_func
+            ? self->cmp_func(self->data + mid * self->elem_size, key)
+            : default_cmp(
+                  self->data + mid * self->elem_size, key, self->elem_size
+              );
+        if (cmp == 0) {
+            *found = 1;
+        }
+        if (cmp <= 0) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    return low;
+}
+
 static int
 orderedset_find_index(const orderedset_t* self, const void* key)
 {
@@ -69,7 +119,9 @@ orderedset_find_index(const orderedset_t* self, const void* key)
         mid = (low + high) / 2;
         int cmp = self->cmp_func
             ? self->cmp_func(self->data + mid * self->elem_size, key)
-            : cmp_int(self->data + mid * self->elem_size, key);
+            : default_cmp(
+                  self->data + mid * self->elem_size, key, self->elem_size
+              );
         if (cmp == 0) {
             return mid;
         } else if (cmp < 0) {
@@ -90,14 +142,21 @@ orderedset_contains(const orderedset_t* self, const void* key)
 static void
 orderedset_add(orderedset_t* self, const void* key)
 {
-    if (orderedset_contains(self, key)) {
+    int found;
+    int uindex = orderedset_find_upperbound_index(self, key, &found);
+    if (found) {
         return;
     }
     if (self->size == self->cap) {
         self->cap *= 2;
-        self->data = realloc(self->data, self->cap);
+        self->data = realloc(self->data, self->cap * self->elem_size);
     }
-    memcpy(self->data + self->size * self->elem_size, key, self->elem_size);
+    memcpy(
+        self->data + (uindex + 1) * self->elem_size,
+        self->data + (uindex)*self->elem_size,
+        (self->size - uindex) * self->elem_size
+    );
+    memcpy(self->data + uindex * self->elem_size, key, self->elem_size);
     self->size += 1;
 }
 
@@ -136,8 +195,9 @@ orderedset_union(orderedset_t* self, const orderedset_t* right)
             memcpy(new_data + k * elem_size, right_elem, elem_size);
             j++;
         } else {
-            int cmp = self->cmp_func ? self->cmp_func(self_elem, right_elem)
-                                     : cmp_int(self_elem, right_elem);
+            int cmp = self->cmp_func
+                ? self->cmp_func(self_elem, right_elem)
+                : default_cmp(self_elem, right_elem, self->elem_size);
             if (cmp < 0) {
                 memcpy(new_data + k * elem_size, self_elem, elem_size);
                 i++;
@@ -173,8 +233,9 @@ orderedset_intersect(orderedset_t* self, const orderedset_t* right)
         } else if (i == self->size) {
             j++;
         } else {
-            int cmp = self->cmp_func ? self->cmp_func(self_elem, right_elem)
-                                     : cmp_int(self_elem, right_elem);
+            int cmp = self->cmp_func
+                ? self->cmp_func(self_elem, right_elem)
+                : default_cmp(self_elem, right_elem, self->elem_size);
             if (cmp < 0) {
                 i++;
             } else if (cmp == 0) {

@@ -10,7 +10,7 @@
 typedef struct epsnfa {
     int state_num;
     int start_state;
-    orderedset_t final_states;
+    int final_state;
     /* type: dynarr of transtion. index is starting state. */
     dynarr_t state_transitions;
 } epsnfa;
@@ -35,6 +35,9 @@ void epsnfa_concat(epsnfa* self, const epsnfa* right);
 
 /* a, b -> a|b */
 void epsnfa_union(epsnfa* self, const epsnfa* right);
+
+/* a, b -> a|b where b is one-transition nfa */
+void epsnfa_bracket_union(epsnfa* self, const epsnfa* right);
 
 /* r -> r* */
 void epsnfa_to_star(epsnfa* self);

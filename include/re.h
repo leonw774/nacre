@@ -14,8 +14,9 @@ enum re_token_type {
     TYPE_LP, /* left and right parenthese */
     TYPE_RP,
     TYPE_ANCHOR, /* anchor */
+    TYPE_END
 };
-#define RE_TYPES_NUM (TYPE_ANCHOR + 1)
+#define RE_TYPES_NUM (TYPE_END)
 extern const char* TYPE_NAME_STRS[RE_TYPES_NUM];
 
 /* literals that need to be escaped in regex */
@@ -47,13 +48,26 @@ extern const char* BRACKET_ESC_CHARS;
 extern const char* BRACKET_ESC_CHARS_TO;
 #define BRACKET_STR_MAX_LEN 127
 
-enum ANCHOR_NAME { ANCHOR_START, ANCHOR_END, ANCHOR_WEDGE };
+enum ANCHOR_NAME {
+    ANCHOR_START,
+    ANCHOR_END,
+    ANCHOR_WEDGE,
+};
 #define ANCHOR_WEDGE_CHAR 'b'
 #define ANCHOR_START_CHAR '^'
 #define ANCHOR_END_CHAR '$'
 
-enum OPERATOR_NAME { OP_PLUS, OP_STAR, OP_OPT, OP_DUP, OP_CONCAT, OP_ALTER };
-#define OP_NAMES_NUM (OP_ALTER + 1)
+enum OPERATOR_NAME {
+    OP_PLUS,
+    OP_STAR,
+    OP_OPT,
+    OP_DUP,
+    OP_CONCAT,
+    OP_ALTER,
+    OP_BRK_ALTER,
+    OP_END
+};
+#define OP_NAMES_NUM (OP_END + 1)
 extern const char* OP_CHARS;
 extern const char* OP_NAME_STRS[];
 extern const int OP_PRECED[OP_NAMES_NUM];

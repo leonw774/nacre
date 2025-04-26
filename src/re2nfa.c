@@ -9,6 +9,7 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
     epsnfa* nfas;
     unsigned char* is_visited;
     dynarr_t index_stack;
+    int i;
     /* if ast is empty */
     if (re_ast->size == 0) {
         return epsnfa_one_transition(EPS_MATCHER());
@@ -116,12 +117,30 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         case TYPE_BOP:
             assert(
                 cur_token.payload == OP_CONCAT || cur_token.payload == OP_ALTER
+                || cur_token.payload == OP_BRK_ALTER
             );
-            nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
             if (cur_token.payload == OP_CONCAT) {
+                nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
                 epsnfa_concat(&nfas[cur_index], &nfas[right_index]);
-            } else {
+            } else if (cur_token.payload == OP_ALTER) {
+                nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
                 epsnfa_union(&nfas[cur_index], &nfas[right_index]);
+            } else {
+                /* bracket alter: expect one of the two nfas to be a
+                   one-transition nfa */
+                if (nfas[left_index].state_num == 2) {
+                    nfas[cur_index] = epsnfa_deepcopy(&nfas[right_index]);
+                    epsnfa_bracket_union(&nfas[cur_index], &nfas[left_index]);
+                } else if (nfas[right_index].state_num == 2) {
+                    nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
+                    epsnfa_bracket_union(&nfas[cur_index], &nfas[right_index]);
+                } else {
+                    printf(
+                        "bracket alter: none of the children is one-transition "
+                        "nfa\n"
+                    );
+                    exit(1);
+                }
             }
             break;
         default:
@@ -134,6 +153,13 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         }
     }
     result = nfas[re_ast->root];
+    for (i = 0; i < re_ast->size; i++) {
+        if (i != re_ast->root) {
+            epsnfa_clear(&nfas[i]);
+        }
+    }
+    dynarr_free(&index_stack);
+    free(is_visited);
     free(nfas);
     return result;
 }
