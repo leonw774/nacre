@@ -304,9 +304,7 @@ tokenization(const char* input_str)
         }
 
         /* update can add concat */
-        if (c == '\\' || c == DUP_START) {
-            /* change state, do nothing */
-        } else {
+        if (cur_state == ST_NORM) {
             can_add_concat = !(IS_BOP(c) || c == '(');
         }
     }

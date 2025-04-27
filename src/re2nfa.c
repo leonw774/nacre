@@ -2,17 +2,20 @@
 #include "re.h"
 #include <stdio.h>
 
-epsnfa
+nfa
 re2nfa(const re_ast_t* re_ast, const int is_debug)
 {
-    epsnfa result;
+    nfa result;
     epsnfa* nfas;
     unsigned char* is_visited;
     dynarr_t index_stack;
     int i;
     /* if ast is empty */
     if (re_ast->size == 0) {
-        return epsnfa_one_transition(EPS_MATCHER());
+        epsnfa empty = epsnfa_one_transition(EPS_MATCHER());
+        result = epsnfa_reduce(&empty);
+        epsnfa_clear(&empty);
+        return result;
     }
     /* if ast is not empty */
     nfas = calloc(re_ast->size, sizeof(epsnfa));
@@ -128,10 +131,15 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             } else {
                 /* bracket alter: expect one of the two nfas to be a
                    one-transition nfa */
-                if (nfas[left_index].state_num == 2) {
+                int is_left_one = nfas[left_index].state_num == 2;
+                int is_right_one = nfas[right_index].state_num == 2;
+                if (is_left_one && is_right_one) {
+                    nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
+                    epsnfa_union(&nfas[cur_index], &nfas[right_index]);
+                } else if (is_left_one) {
                     nfas[cur_index] = epsnfa_deepcopy(&nfas[right_index]);
                     epsnfa_bracket_union(&nfas[cur_index], &nfas[left_index]);
-                } else if (nfas[right_index].state_num == 2) {
+                } else if (is_right_one) {
                     nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
                     epsnfa_bracket_union(&nfas[cur_index], &nfas[right_index]);
                 } else {
@@ -152,11 +160,14 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             epsnfa_print(&nfas[cur_index]);
         }
     }
-    result = nfas[re_ast->root];
     for (i = 0; i < re_ast->size; i++) {
         if (i != re_ast->root) {
             epsnfa_clear(&nfas[i]);
         }
+    }
+    result = epsnfa_reduce(&nfas[re_ast->root]);
+    if (is_debug) {
+        nfa_print(&result);
     }
     dynarr_free(&index_stack);
     free(is_visited);

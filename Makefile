@@ -4,7 +4,11 @@ MAIN_SRCS = src/main.c
 MAIN_TARGET = nfaregex
 MAIN_FLAGS = -O3 -I include/ -Wall -Wextra -Wno-unused-function
 
-DEBUG_FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function -D'IS_DEBUG'
+PROFILE_FLAGS = -Og -I include/ \
+	-Wall -Wextra -Wno-unused-function
+
+DEBUG_FLAGS = -g -pg -fno-pie -no-pie -I include/ \
+	-Wall -Wextra -Wno-unused-function -D'IS_DEBUG'
 
 TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(wildcard tests/*.c))
 TEST_FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function
@@ -12,6 +16,9 @@ TEST_FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function
 
 release: $(SHARED_SRC) $(MAIN_SRCS)
 	gcc $(MAIN_FLAGS) -o $(MAIN_TARGET) $^
+
+profile: $(SHARED_SRC) $(MAIN_SRCS)
+	gcc $(PROFILE_FLAGS) -o $(MAIN_TARGET) $^
 
 debug: $(SHARED_SRC) $(MAIN_SRCS)
 	gcc $(DEBUG_FLAGS) -o $(MAIN_TARGET) $^

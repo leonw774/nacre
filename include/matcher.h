@@ -1,8 +1,11 @@
 #include "re.h"
+#include <ctype.h>
+#include <stdio.h>
 
 #ifndef _MATCHER_H
 #define _MATCHER_H
 
+#define MATCHER_FLAG_NIL 0x00
 #define MATCHER_FLAG_EPS 0x01
 #define MATCHER_FLAG_WC 0x02
 #define MATCHER_FLAG_BYTE 0x04
@@ -18,6 +21,38 @@ typedef struct matcher {
     */
     uint8_t payload;
 } matcher_t;
+
+static char*
+get_matcher_str(matcher_t m)
+{
+    static char matcher_str[40];
+    if (m.flag & MATCHER_FLAG_EPS) {
+        if (m.flag & MATCHER_FLAG_ANCHOR) {
+            char payload_char = '\0';
+            if (m.payload == ANCHOR_START) {
+                payload_char = ANCHOR_START_CHAR;
+            } else if (m.payload == ANCHOR_END) {
+                payload_char = ANCHOR_END_CHAR;
+            } else if (m.flag) {
+                payload_char = ANCHOR_WEDGE_CHAR;
+            }
+            sprintf(matcher_str, "[ANCH %c]", payload_char);
+        } else {
+            sprintf(matcher_str, "[EPS]");
+        }
+    } else if (m.flag & MATCHER_FLAG_WC) {
+        sprintf(matcher_str, "[WC %d]", m.payload);
+    } else if (m.flag & MATCHER_FLAG_BYTE) {
+        if (isprint(m.payload)) {
+            sprintf(matcher_str, "[BYTE '%c']", m.payload);
+        } else {
+            sprintf(matcher_str, "[BYTE \\x%x]", m.payload);
+        }
+    } else {
+        sprintf(matcher_str, "[UNK %d]", m.flag);
+    }
+    return matcher_str;
+}
 
 typedef int anchor_byte;
 #define ANCHOR_BYTE_START ((anchor_byte)(-1))
@@ -77,6 +112,7 @@ match_anchor(enum ANCHOR_NAME anchor, anchor_byte behind, anchor_byte ahead)
         || (anchor == ANCHOR_WEDGE && (isword(behind) != isword(ahead)));
 }
 
+#define NIL_MATCHER() ((matcher_t) { .flag = 0, .payload = 0 })
 #define EPS_MATCHER()                                                          \
     ((matcher_t) {                                                             \
         .flag = MATCHER_FLAG_EPS,                                              \

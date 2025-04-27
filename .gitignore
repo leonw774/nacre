@@ -57,5 +57,7 @@ dkms.conf
 # Outputs
 tests/
 !tests/*.c
-debug.txt 
+debug.txt
+profile.txt
+callgrind.out*
 nfaregex

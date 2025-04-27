@@ -11,7 +11,8 @@
 #define IS_DEBUG_FLAG 0
 #endif
 
-const int MAX_BUFFER_SIZE = 1024;
+const size_t MAX_SOURCE_BUFFER_SIZE = 8 * 1024 * 1024; // 8MB
+const size_t MAX_PRINT_BUFFER_SIZE = 1024;
 
 void
 print_match(
@@ -53,28 +54,25 @@ print_match(
 }
 
 void
-find_matches(const epsnfa* nfa, const char* buffer)
+find_matches(const nfa* nfa, const char* input)
 {
-    size_t start, match_length, len = strlen(buffer);
+    size_t start, match_length, len = strlen(input);
     size_t line_num = 1, col_num = 1, tmp, check_newline_to;
     for (start = 0; start < len; start += match_length) {
-        const char* substring = buffer + start;
-        match_length = epsnfa_match(
-            nfa, substring, start == 0 ? ANCHOR_BYTE_START : buffer[start - 1]
-        );
+        match_length = nfa_match(nfa, input, len, start);
         if (match_length) {
             size_t print_start = start - col_num + 1;
             size_t print_end = start + match_length - 1;
             size_t print_size;
-            char print_buffer[MAX_BUFFER_SIZE];
-            while (buffer[print_end] != '\n') {
+            char print_buffer[MAX_PRINT_BUFFER_SIZE];
+            while (input[print_end] != '\n') {
                 print_end++;
             }
             print_size = print_end - print_start;
-            if (print_size >= MAX_BUFFER_SIZE) {
-                print_size = MAX_BUFFER_SIZE - 1;
+            if (print_size >= MAX_PRINT_BUFFER_SIZE) {
+                print_size = MAX_PRINT_BUFFER_SIZE - 1;
             }
-            strncpy(print_buffer, buffer + print_start, print_size);
+            strncpy(print_buffer, input + print_start, print_size);
             print_buffer[print_size] = '\0';
             print_match(print_buffer, line_num, col_num, match_length);
         } else {
@@ -84,7 +82,7 @@ find_matches(const epsnfa* nfa, const char* buffer)
         /* update line and col between start to start + match_length */
         check_newline_to = start + (match_length == 0 ? 1 : match_length);
         for (tmp = start; tmp < check_newline_to; tmp++) {
-            if (tmp && buffer[tmp - 1] == '\n') {
+            if (tmp && input[tmp - 1] == '\n') {
                 line_num++;
                 col_num = 1;
             } else {
@@ -95,24 +93,24 @@ find_matches(const epsnfa* nfa, const char* buffer)
 }
 
 void
-find_matches_multiline(const epsnfa* nfa, const char* buffer)
+find_matches_multiline(const nfa* nfa, const char* input)
 {
-    size_t line_start = 0, match_length, len = strlen(buffer);
+    size_t line_start = 0, match_length, len = strlen(input);
     size_t line_num = 1;
-
+    char line[MAX_PRINT_BUFFER_SIZE];
     while (line_start < len) {
-        char* line;
-        size_t i, line_end = line_start;
-        while (buffer[line_end] != '\0' && buffer[line_end] != '\n') {
+        size_t i, line_end = line_start, line_len;
+        while (input[line_end] != '\0' && input[line_end] != '\n') {
             line_end++;
         }
-        line = malloc(line_end - line_start + 1);
-        strncpy(line, buffer + line_start, line_end - line_start);
-        line[line_end - line_start] = '\0';
-        for (i = 0; i < line_end - line_start; i++) {
-            match_length = epsnfa_match(
-                nfa, line + i, i == 0 ? ANCHOR_BYTE_START : line[i - 1]
-            );
+        line_len = line_end - line_start;
+        if (line_len >= MAX_PRINT_BUFFER_SIZE) {
+            line_len = MAX_PRINT_BUFFER_SIZE - 1;
+        }
+        strncpy(line, input + line_start, line_len);
+        line[line_len] = '\0';
+        for (i = 0; i < line_len; i++) {
+            match_length = nfa_match(nfa, line, line_len, i);
             if (match_length) {
                 print_match(line, line_num, i + 1, match_length);
                 break;
@@ -120,7 +118,6 @@ find_matches_multiline(const epsnfa* nfa, const char* buffer)
         }
         line_num++;
         line_start = line_end + 1;
-        free(line);
     }
 }
 
@@ -156,7 +153,7 @@ main(int argc, char* argv[])
     }
 
     // Convert the AST to an epsilon-NFA
-    epsnfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
+    nfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
 
     // Open the input file
     FILE* file = fopen(input_file, "r");
@@ -167,8 +164,7 @@ main(int argc, char* argv[])
 
     // Read the file into a buffer with a size limit (128MB) and find matches
     // byte-by-byte
-    const size_t MAX_BUFFER_SIZE = 128 * 1024 * 1024; // 128MB
-    char* buffer = malloc(MAX_BUFFER_SIZE + 1);
+    char* buffer = malloc(MAX_SOURCE_BUFFER_SIZE + 1);
     if (!buffer) {
         perror("Error allocating memory for buffer");
         fclose(file);
@@ -176,11 +172,11 @@ main(int argc, char* argv[])
     }
 
     size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, MAX_BUFFER_SIZE, file)) > 0) {
-        if (bytes_read < MAX_BUFFER_SIZE) {
+    while ((bytes_read = fread(buffer, 1, MAX_SOURCE_BUFFER_SIZE, file)) > 0) {
+        if (bytes_read < MAX_SOURCE_BUFFER_SIZE) {
             buffer[bytes_read] = '\0'; // Null-terminate the buffer
         } else {
-            buffer[MAX_BUFFER_SIZE]
+            buffer[MAX_SOURCE_BUFFER_SIZE]
                 = '\0'; // Ensure null-termination for full buffer
         }
         if (multiline_flag) {
@@ -193,7 +189,7 @@ main(int argc, char* argv[])
     // Clean up
     free(buffer);
     fclose(file);
-    epsnfa_clear(&nfa);
+    nfa_clear(&nfa);
     free(ast.tokens);
     free(ast.lefts);
     free(ast.rights);

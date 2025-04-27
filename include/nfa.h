@@ -1,4 +1,5 @@
 #include "dynarr.h"
+#include "bitmask.h"
 #include "matcher.h"
 #include "orderedset.h"
 #include "transition.h"
@@ -14,6 +15,14 @@ typedef struct epsnfa {
     /* type: dynarr of transtion. index is starting state. */
     dynarr_t state_transitions;
 } epsnfa;
+
+/* NFA */
+typedef struct nfa {
+    int state_num;
+    int start_state;
+    matcher_t* transition_table;
+    bitmask_t is_finish;
+} nfa;
 
 /* initialize an epsnfa of one start states, one final states, and one
    transition between them
@@ -45,10 +54,26 @@ void epsnfa_to_star(epsnfa* self);
 /* r -> r? */
 void epsnfa_to_opt(epsnfa* self);
 
+
+/* nfa methods */
+
+void nfa_get_eps_closure(nfa* self, int state, bitmask_t* closure);
+
+void nfa_reduce_state(nfa* self, int state, bitmask_t* visited);
+
+nfa epsnfa_reduce(epsnfa* input);
+
+void nfa_print(nfa* self);
+
+void nfa_clear(nfa* self);
+
+#define MATCH_SEARCH_DEPTH_LIMIT 100000
+
 /* return n if n is the smallest integer such that input_str[0:n] matches
    return -1 if no match found */
-size_t epsnfa_match(
-    const epsnfa* self, const char* input_str, const int is_start_behind
+size_t nfa_match(
+    const nfa* self, const char* input_str, const size_t intput_len,
+    const size_t start_offset
 );
 
 #endif
