@@ -2,23 +2,23 @@
 #include "re.h"
 #include <stdio.h>
 
-nfa
+epsnfa
 re2nfa(const re_ast_t* re_ast, const int is_debug)
 {
-    nfa result;
-    epsnfa* nfas;
+    epsnfa result;
+    tepsnfa* nfas;
     unsigned char* is_visited;
     dynarr_t index_stack;
     int i;
     /* if ast is empty */
     if (re_ast->size == 0) {
-        epsnfa empty = epsnfa_one_transition(EPS_MATCHER());
-        result = epsnfa_reduce(&empty);
-        epsnfa_clear(&empty);
+        tepsnfa empty = tepsnfa_one_transition(EPS_MATCHER());
+        result = tepsnfa_reduce_eps_as_epsnfa(&empty);
+        tepsnfa_clear(&empty);
         return result;
     }
     /* if ast is not empty */
-    nfas = calloc(re_ast->size, sizeof(epsnfa));
+    nfas = calloc(re_ast->size, sizeof(tepsnfa));
     is_visited = calloc(re_ast->size, sizeof(unsigned char));
     index_stack = dynarr_new(sizeof(int));
     append(&index_stack, &re_ast->root);
@@ -51,11 +51,11 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         switch (cur_token.type) {
         case TYPE_LIT:
             nfas[cur_index]
-                = epsnfa_one_transition(BYTE_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(BYTE_MATCHER(cur_token.payload));
             break;
         case TYPE_ANCHOR:
             nfas[cur_index]
-                = epsnfa_one_transition(ANCHOR_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(ANCHOR_MATCHER(cur_token.payload));
             break;
         case TYPE_DUP: {
             /* expand the dup operation with concat, alter, opt, and star.
@@ -64,56 +64,56 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
                - "a{4}" become "aaaa"
                - "a{2,5}" become "aa(a(a(a)?)?)?"
             */
-            epsnfa* cur_nfa = &nfas[cur_index];
-            epsnfa* left_nfa = &nfas[left_index];
+            tepsnfa* cur_nfa = &nfas[cur_index];
+            tepsnfa* left_nfa = &nfas[left_index];
             int min = cur_token.payload;
             int max = cur_token.payload2;
             int i;
-            *cur_nfa = epsnfa_deepcopy(left_nfa);
+            *cur_nfa = tepsnfa_deepcopy(left_nfa);
             for (i = 1; i < min; i++) {
-                epsnfa_concat(cur_nfa, left_nfa);
+                tepsnfa_concat(cur_nfa, left_nfa);
             }
             if (max == DUP_NO_MAX) {
                 /* at least min depulication */
-                epsnfa left_star = epsnfa_deepcopy(left_nfa);
-                epsnfa_to_star(&left_star);
-                epsnfa_concat(cur_nfa, &left_star);
-                epsnfa_clear(&left_star);
+                tepsnfa left_star = tepsnfa_deepcopy(left_nfa);
+                tepsnfa_to_star(&left_star);
+                tepsnfa_concat(cur_nfa, &left_star);
+                tepsnfa_clear(&left_star);
             } else if (min == max) {
                 /* extact duplication */
                 /* do nothing */
             } else {
-                epsnfa tail_opt = epsnfa_deepcopy(left_nfa);
+                tepsnfa tail_opt = tepsnfa_deepcopy(left_nfa);
                 int j;
                 for (j = 1; j < max - min; j++) {
-                    epsnfa head = epsnfa_deepcopy(left_nfa);
-                    epsnfa_to_opt(&tail_opt);
-                    epsnfa_concat(&head, &tail_opt);
-                    epsnfa_clear(&tail_opt);
+                    tepsnfa head = tepsnfa_deepcopy(left_nfa);
+                    tepsnfa_to_opt(&tail_opt);
+                    tepsnfa_concat(&head, &tail_opt);
+                    tepsnfa_clear(&tail_opt);
                     tail_opt = head;
                 }
-                epsnfa_to_opt(&tail_opt);
-                epsnfa_concat(cur_nfa, &tail_opt);
-                epsnfa_clear(&tail_opt);
+                tepsnfa_to_opt(&tail_opt);
+                tepsnfa_concat(cur_nfa, &tail_opt);
+                tepsnfa_clear(&tail_opt);
             }
             break;
         }
         case TYPE_WC:
             nfas[cur_index]
-                = epsnfa_one_transition(WC_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(WC_MATCHER(cur_token.payload));
             break;
         case TYPE_UOP:
-            nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
+            nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
             switch (cur_token.payload) {
             case OP_PLUS:
-                epsnfa_concat(&nfas[cur_index], &nfas[left_index]);
-                epsnfa_to_star(&nfas[cur_index]);
+                tepsnfa_concat(&nfas[cur_index], &nfas[left_index]);
+                tepsnfa_to_star(&nfas[cur_index]);
                 break;
             case OP_STAR:
-                epsnfa_to_star(&nfas[cur_index]);
+                tepsnfa_to_star(&nfas[cur_index]);
                 break;
             case OP_OPT:
-                epsnfa_to_opt(&nfas[cur_index]);
+                tepsnfa_to_opt(&nfas[cur_index]);
                 break;
             }
             break;
@@ -123,29 +123,29 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
                 || cur_token.payload == OP_BRK_ALTER
             );
             if (cur_token.payload == OP_CONCAT) {
-                nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
-                epsnfa_concat(&nfas[cur_index], &nfas[right_index]);
+                nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
+                tepsnfa_concat(&nfas[cur_index], &nfas[right_index]);
             } else if (cur_token.payload == OP_ALTER) {
-                nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
-                epsnfa_union(&nfas[cur_index], &nfas[right_index]);
+                nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
+                tepsnfa_union(&nfas[cur_index], &nfas[right_index]);
             } else {
-                /* bracket alter: expect one of the two nfas to be a
-                   one-transition nfa */
+                /* bracket alter: expect one of the two epsnfas to be a
+                   one-transition epsnfa */
                 int is_left_one = nfas[left_index].state_num == 2;
                 int is_right_one = nfas[right_index].state_num == 2;
                 if (is_left_one && is_right_one) {
-                    nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
-                    epsnfa_union(&nfas[cur_index], &nfas[right_index]);
+                    nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
+                    tepsnfa_union(&nfas[cur_index], &nfas[right_index]);
                 } else if (is_left_one) {
-                    nfas[cur_index] = epsnfa_deepcopy(&nfas[right_index]);
-                    epsnfa_bracket_union(&nfas[cur_index], &nfas[left_index]);
+                    nfas[cur_index] = tepsnfa_deepcopy(&nfas[right_index]);
+                    tepsnfa_bracket_union(&nfas[cur_index], &nfas[left_index]);
                 } else if (is_right_one) {
-                    nfas[cur_index] = epsnfa_deepcopy(&nfas[left_index]);
-                    epsnfa_bracket_union(&nfas[cur_index], &nfas[right_index]);
+                    nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
+                    tepsnfa_bracket_union(&nfas[cur_index], &nfas[right_index]);
                 } else {
                     printf(
                         "bracket alter: none of the children is one-transition "
-                        "nfa\n"
+                        "epsnfa\n"
                     );
                     exit(1);
                 }
@@ -157,17 +157,15 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         }
 
         if (is_debug) {
-            epsnfa_print(&nfas[cur_index]);
+            tepsnfa_print(&nfas[cur_index]);
         }
     }
+    result = tepsnfa_reduce_eps_as_epsnfa(&nfas[re_ast->root]);
     for (i = 0; i < re_ast->size; i++) {
-        if (i != re_ast->root) {
-            epsnfa_clear(&nfas[i]);
-        }
+        tepsnfa_clear(&nfas[i]);
     }
-    result = epsnfa_reduce(&nfas[re_ast->root]);
     if (is_debug) {
-        nfa_print(&result);
+        epsnfa_print(&result);
     }
     dynarr_free(&index_stack);
     free(is_visited);

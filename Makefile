@@ -4,11 +4,11 @@ MAIN_SRCS = src/main.c
 MAIN_TARGET = nfaregex
 MAIN_FLAGS = -O3 -I include/ -Wall -Wextra -Wno-unused-function
 
-PROFILE_FLAGS = -Og -I include/ \
+PROFILE_FLAGS = -Og -pg -fno-pie -no-pie -I include/ \
 	-Wall -Wextra -Wno-unused-function
 
-DEBUG_FLAGS = -g -pg -fno-pie -no-pie -I include/ \
-	-Wall -Wextra -Wno-unused-function -D'IS_DEBUG'
+DEBUG_FLAGS = -g -I include/ \
+	-Wall -Wextra -Wno-unused-function -D'IS_DEBUG' # -D'VERBOSE_MATCH'
 
 TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(wildcard tests/*.c))
 TEST_FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function

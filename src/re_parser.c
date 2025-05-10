@@ -4,20 +4,28 @@
 #include <stdio.h>
 #include <string.h>
 
-/* parse the bracket expression (the thing in side "[]")
+/*
+    parse the bracket expression (the thing in side "[]")
+    
+    ```
         BRACKET_EXPR = CHAR_EXPR
                     | BRACKET_EXPR CHAR_EXPR
                     | BRACKET_EXPR RANGE_EXPR
                     ;
         RANGE_EXPR   = CHAR_EXPR '-' CHAR_EXPR;
-        CHAR_EXPR    = CHAR | '\' ESC_CHAR;
-        ESC_CHAR     = '-' | ']' | '^' | 'n' | 'r' | 't' | 'v' | 'f';
-        CHAR         = [all printables]
-   into an equivalent alter expression
-        ALTER_EXPR = ALTER_EXPR '|' CHAR_EXPR | CHAR_EXPR;
-        CHAR_EXPR  = CHAR | '\' ESC_EXPR;
+        CHAR_EXPR    = CHAR | '\' ESC_CHAR;  
+        ESC_CHAR     = '-' | ']' | '^' | 'n' | 'r' | 't' | 'v' | 'f';  
+        CHAR         = [all printables]  
+    ```
+
+    into an equivalent alter expression
+
+    ```
+        ALTER_EXPR = ALTER_EXPR '|' CHAR_EXPR | CHAR_EXPR;  
+        CHAR_EXPR  = CHAR | '\' ESC_EXPR;  
         ESC_EXPR   = '.' | '+' | '*' | '?' | '|' | '(' | ')' | '{' | '\'
-                    | '^' | '$';
+                    | '^' | '$';  
+    ```
 */
 dynarr_t
 parse_bracket_expr(const char* input_str)
@@ -92,6 +100,10 @@ dynarr_t
 tokenization(const char* input_str)
 {
     size_t i, input_size = strlen(input_str);
+    if (input_size > RE_STR_LEN_LIMIT) {
+        printf("regexp str too long: %lu > %d\n",input_size, RE_STR_LEN_LIMIT);
+        exit(1);
+    }
     int can_add_concat = 0;
 
     enum state { ST_ESC, ST_DUP, ST_BRK, ST_NORM };

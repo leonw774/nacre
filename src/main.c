@@ -11,7 +11,7 @@
 #define IS_DEBUG_FLAG 0
 #endif
 
-const size_t MAX_SOURCE_BUFFER_SIZE = 8 * 1024 * 1024; // 8MB
+const size_t MAX_SOURCE_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB
 const size_t MAX_PRINT_BUFFER_SIZE = 1024;
 
 void
@@ -54,17 +54,17 @@ print_match(
 }
 
 void
-find_matches(const nfa* nfa, const char* input)
+find_matches(const epsnfa* epsnfa, const char* input)
 {
+    char print_buffer[MAX_PRINT_BUFFER_SIZE];
     size_t start, match_length, len = strlen(input);
     size_t line_num = 1, col_num = 1, tmp, check_newline_to;
     for (start = 0; start < len; start += match_length) {
-        match_length = nfa_match(nfa, input, len, start);
+        match_length = epsnfa_match(epsnfa, input, len, start);
         if (match_length) {
             size_t print_start = start - col_num + 1;
             size_t print_end = start + match_length - 1;
             size_t print_size;
-            char print_buffer[MAX_PRINT_BUFFER_SIZE];
             while (input[print_end] != '\n') {
                 print_end++;
             }
@@ -93,7 +93,7 @@ find_matches(const nfa* nfa, const char* input)
 }
 
 void
-find_matches_multiline(const nfa* nfa, const char* input)
+find_matches_multiline(const epsnfa* epsnfa, const char* input)
 {
     size_t line_start = 0, match_length, len = strlen(input);
     size_t line_num = 1;
@@ -110,7 +110,7 @@ find_matches_multiline(const nfa* nfa, const char* input)
         strncpy(line, input + line_start, line_len);
         line[line_len] = '\0';
         for (i = 0; i < line_len; i++) {
-            match_length = nfa_match(nfa, line, line_len, i);
+            match_length = epsnfa_match(epsnfa, line, line_len, i);
             if (match_length) {
                 print_match(line, line_num, i + 1, match_length);
                 break;
@@ -152,8 +152,8 @@ main(int argc, char* argv[])
         return 1;
     }
 
-    // Convert the AST to an epsilon-NFA
-    nfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
+    // Convert the AST to an reduced epsilon-NFA
+    epsnfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
 
     // Open the input file
     FILE* file = fopen(input_file, "r");
@@ -189,7 +189,7 @@ main(int argc, char* argv[])
     // Clean up
     free(buffer);
     fclose(file);
-    nfa_clear(&nfa);
+    epsnfa_clear(&nfa);
     free(ast.tokens);
     free(ast.lefts);
     free(ast.rights);
