@@ -5,12 +5,12 @@ NacRE is a lightweight, NFA-based regular expression engine that supports a subs
 ## Supported Syntax
 
 - Literals: `a`, `b`, `c`, etc.
-- Wildcards: `.`
+- Wildcards: `.`, `\d`, `\D`, `\w`, `\W`, `\s`, `\S`, 
 - Anchors: `^`, `$`
 - Quantifiers: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`
 - Alternation: `|`
 - Grouping: `()`
-- Character Classes: `[abc]`, `[a-z]`, `[^abc]`
+- Character Classes: `[abc]`, `[a-z]`
 
 ## Installation
 
