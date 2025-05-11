@@ -108,4 +108,6 @@ typedef struct re_ast {
     int root;
 } re_ast_t;
 
+void re_ast_free(re_ast_t* ast);
+
 #endif

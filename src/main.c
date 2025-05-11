@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #ifdef IS_DEBUG
 #define IS_DEBUG_FLAG 1
@@ -11,15 +12,21 @@
 #define IS_DEBUG_FLAG 0
 #endif
 
-const size_t MAX_SOURCE_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB
+const size_t MAX_INPUT_BUF_SIZE = 128 * 1024 * 1024; // 128MB
 const size_t MAX_PRINT_BUFFER_SIZE = 1024;
+
+typedef struct match_flags {
+    unsigned char global;
+    unsigned char multiline;
+
+} match_flags_t;
 
 void
 print_match(
     const char* buffer, size_t start_line, size_t start_col, size_t length
 )
 {
-    int is_first_line = 1;
+    int is_match_started = 0;
     size_t print_match_count = 0;
     size_t line_start = 0, line_end = 0;
     printf("%lu, %lu (%lu)\n", start_line, start_col, length);
@@ -32,11 +39,11 @@ print_match(
             fwrite(buffer + line_start, 1, line_end - line_start, stdout);
         }
         printf("\n");
-        if (is_first_line) {
+        if (is_match_started == 0) {
             for (i = 0; i < start_col - 1; i++) {
                 printf(" ");
             }
-            is_first_line = 0;
+            is_match_started = 1;
         }
         for (; i < line_end - line_start; i++) {
             if (print_match_count < length) {
@@ -54,7 +61,7 @@ print_match(
 }
 
 void
-find_matches(const epsnfa* epsnfa, const char* input)
+find_matches(const epsnfa* epsnfa, const char* input, const int is_global)
 {
     char print_buffer[MAX_PRINT_BUFFER_SIZE];
     size_t start, match_length, len = strlen(input);
@@ -75,6 +82,9 @@ find_matches(const epsnfa* epsnfa, const char* input)
             strncpy(print_buffer, input + print_start, print_size);
             print_buffer[print_size] = '\0';
             print_match(print_buffer, line_num, col_num, match_length);
+            if (!is_global) {
+                break;
+            }
         } else {
             /* start still need to increase by one */
             start++;
@@ -93,7 +103,9 @@ find_matches(const epsnfa* epsnfa, const char* input)
 }
 
 void
-find_matches_multiline(const epsnfa* epsnfa, const char* input)
+find_matches_multiline(
+    const epsnfa* epsnfa, const char* input, const int is_global
+)
 {
     size_t line_start = 0, match_length, len = strlen(input);
     size_t line_num = 1;
@@ -113,7 +125,9 @@ find_matches_multiline(const epsnfa* epsnfa, const char* input)
             match_length = epsnfa_match(epsnfa, line, line_len, i);
             if (match_length) {
                 print_match(line, line_num, i + 1, match_length);
-                break;
+                if (!is_global) {
+                    break;
+                }
             }
         }
         line_num++;
@@ -124,75 +138,88 @@ find_matches_multiline(const epsnfa* epsnfa, const char* input)
 int
 main(int argc, char* argv[])
 {
-    const char* multiline_flag = NULL;
+
+    match_flags_t match_flag;
     const char* regex = NULL;
     const char* input_file = NULL;
+    const char* opt_def = "gmi";
+    const char* usage = "Usage: %s [OPTION] PATTERN INPUT_FILE\n";
+    int c;
+    extern int optind, optopt;
 
-    if (argc != 3 && argc != 4) {
-        fprintf(stderr, "Usage: %s [-m] {re} {input_file}\n", argv[0]);
-        return 1;
-    }
-    if (argc == 3) {
-        regex = argv[1];
-        input_file = argv[2];
-    } else {
-        multiline_flag = argv[1];
-        if (strcmp(multiline_flag, "-m") != 0) {
-            fprintf(stderr, "Usage: %s [-m] {re} {input_file}\n", argv[0]);
-            return 1;
+    re_ast_t ast;
+    epsnfa nfa;
+    FILE* file;
+
+    memset(&match_flag, 0, sizeof(match_flags_t));
+    while ((c = getopt(argc, argv, opt_def)) != -1) {
+        switch (c) {
+        case 'g':
+            match_flag.global = 1;
+            break;
+        case 'm':
+            match_flag.multiline = 1;
+            break;
+        case '?':
+            if (isprint(optopt)) {
+                fprintf(stderr, "Bad argument %c\n", (char)optopt);
+            } else {
+                fprintf(stderr, "Bad argument \\x%x\n", (char)optopt);
+            }
+            break;
+        default:
+            fprintf(stderr, usage, argv[0]);
+            abort();
         }
-        regex = argv[2];
-        input_file = argv[3];
+    }
+    if (argc - optind == 2) {
+        regex = argv[optind];
+        input_file = argv[optind + 1];
+    } else {
+        fprintf(stderr, usage, argv[0]);
     }
 
-    // Parse the regex into an AST
-    re_ast_t ast = parse_regex(regex, IS_DEBUG_FLAG);
+    // parse the regex into an AST
+    ast = parse_regex(regex, IS_DEBUG_FLAG);
     if (ast.size == 0) {
         fprintf(stderr, "Error: Failed to parse regex.\n");
         return 1;
     }
 
-    // Convert the AST to an reduced epsilon-NFA
-    epsnfa nfa = re2nfa(&ast, IS_DEBUG_FLAG);
+    // convert AST to an reduced epsilon-NFA
+    nfa = re2nfa(&ast, IS_DEBUG_FLAG);
 
-    // Open the input file
-    FILE* file = fopen(input_file, "r");
+    // ppen the input file
+    file = fopen(input_file, "r");
     if (!file) {
         perror("Error opening file");
         return 1;
     }
 
-    // Read the file into a buffer with a size limit (128MB) and find matches
-    // byte-by-byte
-    char* buffer = malloc(MAX_SOURCE_BUFFER_SIZE + 1);
-    if (!buffer) {
-        perror("Error allocating memory for buffer");
-        fclose(file);
-        return 1;
+    /* read the file into a buffer with a size limit and find matches */
+    {
+        char* buffer = malloc(MAX_INPUT_BUF_SIZE + 1);
+        size_t bytes_read;
+        if (!buffer) {
+            perror("Error allocating memory for buffer");
+            fclose(file);
+            return 1;
+        }
+        while ((bytes_read = fread(buffer, 1, MAX_INPUT_BUF_SIZE, file)) > 0) {
+            // Null-terminate the buffer
+            buffer[bytes_read] = '\0';
+            buffer[MAX_INPUT_BUF_SIZE] = '\0';
+            if (match_flag.multiline) {
+                find_matches_multiline(&nfa, buffer, match_flag.global);
+            } else {
+                find_matches(&nfa, buffer, match_flag.global);
+            }
+        }
+        free(buffer);
     }
 
-    size_t bytes_read;
-    while ((bytes_read = fread(buffer, 1, MAX_SOURCE_BUFFER_SIZE, file)) > 0) {
-        if (bytes_read < MAX_SOURCE_BUFFER_SIZE) {
-            buffer[bytes_read] = '\0'; // Null-terminate the buffer
-        } else {
-            buffer[MAX_SOURCE_BUFFER_SIZE]
-                = '\0'; // Ensure null-termination for full buffer
-        }
-        if (multiline_flag) {
-            find_matches_multiline(&nfa, buffer);
-        } else {
-            find_matches(&nfa, buffer);
-        }
-    }
-
-    // Clean up
-    free(buffer);
     fclose(file);
     epsnfa_clear(&nfa);
-    free(ast.tokens);
-    free(ast.lefts);
-    free(ast.rights);
-
+    re_ast_free(&ast);
     return 0;
 }

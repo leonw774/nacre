@@ -56,7 +56,6 @@ dkms.conf
 
 # Outputs
 tests/
-!tests/*.c
 debug.txt
 profile.txt
 callgrind.out*
