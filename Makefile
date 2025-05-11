@@ -1,7 +1,7 @@
 SHARED_SRC = $(filter-out src/main.c, $(wildcard src/*.c))
 
 MAIN_SRCS = src/main.c
-MAIN_TARGET = nfaregex
+MAIN_TARGET = nacre
 MAIN_FLAGS = -O3 -I include/ -Wall -Wextra -Wno-unused-function
 
 PROFILE_FLAGS = -Og -pg -fno-pie -no-pie -I include/ \

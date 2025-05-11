@@ -59,4 +59,4 @@ tests/
 debug.txt
 profile.txt
 callgrind.out*
-nfaregex
+nacre
