@@ -10,7 +10,7 @@ NacRE is a lightweight, NFA-based regular expression engine that supports a subs
 - Quantifiers: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`
 - Alternation: `|`
 - Grouping: `()`
-- Character Classes: `[abc]`, `[a-z]`
+- Character Classes: `[abc]`, `[^abc]`, `[a-z]`, `[\d\w]`
 
 ## Installation
 

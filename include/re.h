@@ -1,4 +1,5 @@
 #include "dynarr.h"
+#include "char_class.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -6,22 +7,22 @@
 #define RE_H
 
 enum re_token_type {
-    TYPE_LIT, /* literal */
+    TYPE_BYTE, /* byte */
     TYPE_WC, /* wildcard */
+    TYPE_CLASS, /* character class */
     TYPE_UOP, /* unary operators */
     TYPE_DUP, /* duplicator */
     TYPE_BOP, /* binary operators */
-    TYPE_LP, /* left and right parenthese */
-    TYPE_RP,
+    TYPE_LP, /* left parenthese */
+    TYPE_RP, /* right parenthese */
     TYPE_ANCHOR, /* anchor */
-    TYPE_END
+    TYPE_END,
 };
 #define RE_TYPES_NUM (TYPE_END)
 extern const char* TYPE_NAME_STRS[RE_TYPES_NUM];
 
 /* literals that need to be escaped in regex */
-extern const char* LIT_ESC_CHARS;
-#define IS_LIT_ESC(c) (strchr(LIT_ESC_CHARS, c))
+extern const char* BYTE_ESC_CHARS;
 
 /* non-printables that need to be escaped in regex */
 extern const char* NONPRINT_ESC_CHARS;
@@ -40,6 +41,7 @@ enum WILDCARD_NAME {
     WC_SPACE, /* ' ', '\t', '\n', '\v', \f', '\r' */
     WC_NONSPACE,
     WC_ANY,
+    WC_END,
 };
 #define WC_ANY_CHAR '.'
 
@@ -64,7 +66,6 @@ enum OPERATOR_NAME {
     OP_DUP,
     OP_CONCAT,
     OP_ALTER,
-    OP_BRK_ALTER,
     OP_END
 };
 #define OP_NAMES_NUM (OP_END + 1)
@@ -76,7 +77,6 @@ extern const int OP_PRECED[OP_NAMES_NUM];
 /* is a < b in precedence? */
 #define OP_PRECED_LT(a, b) (OP_PRECED[a] < OP_PRECED[b])
 
-
 #define DUP_NUM_MAX 0xFF
 #define DUP_NO_MAX 0
 #define DUP_STR_MAX_LEN 3
@@ -84,17 +84,23 @@ extern const int OP_PRECED[OP_NAMES_NUM];
 #define DUP_SEP ','
 #define DUP_END '}'
 
-/* type | payload       | payload2
-   -----|---------------|---------
-   LIT  | byte          | -
-   WC   | wildcard enum | -
-   DUP  | min           | max
-   OP   | op enum       | -
-*/
+typedef struct dup_payload {
+    uint16_t min;
+    uint16_t max;
+} dup_payload_t;
+
+typedef union token_payload {
+    uint8_t byte;
+    enum WILDCARD_NAME wc;
+    dup_payload_t dup;
+    enum ANCHOR_NAME anch;
+    enum OPERATOR_NAME op;
+    char_class_t class;
+} token_payload_t;
+
 typedef struct re_token {
     uint8_t type;
-    uint8_t payload;
-    uint8_t payload2;
+    token_payload_t payload;
 } re_token_t;
 #define token_size sizeof(re_token_t)
 

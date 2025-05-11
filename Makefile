@@ -8,7 +8,7 @@ PROFILE_FLAGS = -Og -pg -fno-pie -no-pie -I include/ \
 	-Wall -Wextra -Wno-unused-function
 
 DEBUG_FLAGS = -g -I include/ \
-	-Wall -Wextra -Wno-unused-function -D'IS_DEBUG' # -D'VERBOSE_MATCH'
+	-Wall -Wextra -Wno-unused-function -D'IS_DEBUG' #-D'VERBOSE_MATCH'
 
 TEST_TARGETS = $(patsubst tests/%.c, tests/%, $(wildcard tests/*.c))
 TEST_FLAGS = -g -I include/ -Wall -Wextra -Wno-unused-function

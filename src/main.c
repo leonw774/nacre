@@ -18,7 +18,6 @@ const size_t MAX_PRINT_BUFFER_SIZE = 1024;
 typedef struct match_flags {
     unsigned char global;
     unsigned char multiline;
-
 } match_flags_t;
 
 void

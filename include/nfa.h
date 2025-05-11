@@ -24,6 +24,7 @@ typedef struct epsnfa {
     matcher_t* transition_table;
     bitmask_t is_start;
     bitmask_t is_finish;
+    dynarr_t char_class_pool; /* type: char_class_t */
 } epsnfa;
 
 
@@ -50,7 +51,7 @@ void tepsnfa_concat(tepsnfa* self, const tepsnfa* right);
 void tepsnfa_union(tepsnfa* self, const tepsnfa* right);
 
 /* a, b -> a|b where b is one-transition epsnfa */
-void tepsnfa_bracket_union(tepsnfa* self, const tepsnfa* right);
+void tepsnfa_fast_union(tepsnfa* self, const tepsnfa* right);
 
 /* r -> r* */
 void tepsnfa_to_star(tepsnfa* self);

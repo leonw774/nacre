@@ -14,7 +14,7 @@ typedef struct bitmask {
 static bitmask_t
 bitmask_new(size_t size)
 {
-    assert(size != 0);
+    assert(size != 0 && size < 256);
     return (bitmask_t) {
         .mask = calloc((size - 1) / 8 + 1, 1),
         .byte_size = (size - 1) / 8 + 1,

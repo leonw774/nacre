@@ -173,14 +173,14 @@ tepsnfa_union(tepsnfa* self, const tepsnfa* right)
         append(&self->state_transitions, &new_final_transition_set);
     }
     /* add eps from new start to self start and right start */
-    tepsnfa_add_transition(self, new_start, EPS_MATCHER(), self->start_state);
+    tepsnfa_add_transition(self, new_start, eps_matcher(), self->start_state);
     tepsnfa_add_transition(
-        self, new_start, EPS_MATCHER(), right->start_state + self->state_num
+        self, new_start, eps_matcher(), right->start_state + self->state_num
     );
     /* add eps from self final and right final to new final */
-    tepsnfa_add_transition(self, self->final_state, EPS_MATCHER(), new_final);
+    tepsnfa_add_transition(self, self->final_state, eps_matcher(), new_final);
     tepsnfa_add_transition(
-        self, right->final_state + self->state_num, EPS_MATCHER(), new_final
+        self, right->final_state + self->state_num, eps_matcher(), new_final
     );
     /* set new start and final state */
     self->final_state = new_final;
@@ -189,7 +189,7 @@ tepsnfa_union(tepsnfa* self, const tepsnfa* right)
 }
 
 void
-tepsnfa_bracket_union(tepsnfa* self, const tepsnfa* right)
+tepsnfa_fast_union(tepsnfa* self, const tepsnfa* right)
 {
     int i, j;
     assert(right->state_transitions.size == 2);
@@ -211,11 +211,11 @@ tepsnfa_bracket_union(tepsnfa* self, const tepsnfa* right)
         append(&self->state_transitions, &to_transition_set);
     }
     tepsnfa_add_transition(
-        self, self->start_state, EPS_MATCHER(),
+        self, self->start_state, eps_matcher(),
         right->start_state + self->state_num
     );
     tepsnfa_add_transition(
-        self, right->final_state + self->state_num, EPS_MATCHER(),
+        self, right->final_state + self->state_num, eps_matcher(),
         self->final_state
     );
     self->state_num += 2;
@@ -229,15 +229,15 @@ tepsnfa_to_star(tepsnfa* self)
     tepsnfa_add_state(self);
     tepsnfa_add_state(self);
     /* add eps from star-start to self-start */
-    tepsnfa_add_transition(self, star_start, EPS_MATCHER(), self->start_state);
+    tepsnfa_add_transition(self, star_start, eps_matcher(), self->start_state);
     /* add eps from self-finals to self-start */
     tepsnfa_add_transition(
-        self, self->final_state, EPS_MATCHER(), self->start_state
+        self, self->final_state, eps_matcher(), self->start_state
     );
     /* add eps from self-finals to star-final */
-    tepsnfa_add_transition(self, self->final_state, EPS_MATCHER(), star_final);
+    tepsnfa_add_transition(self, self->final_state, eps_matcher(), star_final);
     /* add eps from star-start to star-final */
-    tepsnfa_add_transition(self, star_start, EPS_MATCHER(), star_final);
+    tepsnfa_add_transition(self, star_start, eps_matcher(), star_final);
     /* set new start and final state */
     self->start_state = star_start;
     self->final_state = star_final;
@@ -248,7 +248,7 @@ tepsnfa_to_opt(tepsnfa* self)
 {
     /* add an eps-transition from start state to final state */
     tepsnfa_add_transition(
-        self, self->start_state, EPS_MATCHER(), self->final_state
+        self, self->start_state, eps_matcher(), self->final_state
     );
 }
 
@@ -396,6 +396,12 @@ epsnfa_new(const int state_num)
         .is_start = bitmask_new(state_num),
         .is_finish = bitmask_new(state_num),
         .transition_table = calloc(state_num * state_num, sizeof(matcher_t)),
+        .char_class_pool = (dynarr_t) {
+            .size = 0,
+            .cap = 0,
+            .data = NULL,
+            .elem_size = 0,
+        }
     };
 }
 
@@ -473,7 +479,7 @@ epsnfa_reduce_eps(epsnfa* self, int state)
             matcher_t m = self->transition_table[k];
             if (m.flag == MATCHER_FLAG_EPS) {
                 // printf("remove (%d, ?, %d)\n", state, j);
-                self->transition_table[k] = NIL_MATCHER();
+                self->transition_table[k] = nil_matcher();
             }
         }
     }
@@ -498,6 +504,10 @@ epsnfa_print(epsnfa* self)
         if (bitmask_contains(&self->is_finish, i)) {
             printf(" %d", i);
         }
+    }
+    printf("\nCharactor classes:\n");
+    for (i = 0; i < self->char_class_pool.size; i++) {
+        printf("#%d ", i);
     }
     printf("\nTransitions:\n\nstateDiagram\n");
     for (i = 0; i < self->state_num; i++) {
@@ -601,6 +611,10 @@ epsnfa_match(
                     ahead = cur_char;
                 }
                 is_matched = match_anchor(m.payload, behind, ahead);
+            } else if (m.flag & MATCHER_FLAG_CLASS) {
+                char_class_t* c = at(&self->char_class_pool, m.payload);
+                assert(c != NULL);
+                is_matched = match_class(*c, cur_char);
             } else if (cur_pos + start_offset <= intput_len - 1) {
                 is_matched = match_byte(m, cur_char);
             } else {

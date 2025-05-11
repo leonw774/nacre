@@ -9,10 +9,11 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
     tepsnfa* nfas;
     unsigned char* is_visited;
     dynarr_t index_stack;
+    dynarr_t char_class_pool = dynarr_new(sizeof(char_class_t));
     int i;
     /* if ast is empty */
     if (re_ast->size == 0) {
-        tepsnfa empty = tepsnfa_one_transition(EPS_MATCHER());
+        tepsnfa empty = tepsnfa_one_transition(eps_matcher());
         result = tepsnfa_reduce_eps_as_epsnfa(&empty);
         tepsnfa_clear(&empty);
         return result;
@@ -49,13 +50,19 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         pop(&index_stack);
 
         switch (cur_token.type) {
-        case TYPE_LIT:
+        case TYPE_BYTE:
             nfas[cur_index]
-                = tepsnfa_one_transition(BYTE_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(byte_matcher(cur_token.payload.byte));
             break;
         case TYPE_ANCHOR:
             nfas[cur_index]
-                = tepsnfa_one_transition(ANCHOR_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(anchor_matcher(cur_token.payload.anch)
+                );
+            break;
+        case TYPE_CLASS:
+            nfas[cur_index]
+                = tepsnfa_one_transition(class_matcher(char_class_pool.size));
+            append(&char_class_pool, &cur_token.payload.class);
             break;
         case TYPE_DUP: {
             /* expand the dup operation with concat, alter, opt, and star.
@@ -66,8 +73,8 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             */
             tepsnfa* cur_nfa = &nfas[cur_index];
             tepsnfa* left_nfa = &nfas[left_index];
-            int min = cur_token.payload;
-            int max = cur_token.payload2;
+            int min = cur_token.payload.dup.min;
+            int max = cur_token.payload.dup.max;
             int i;
             *cur_nfa = tepsnfa_deepcopy(left_nfa);
             for (i = 1; i < min; i++) {
@@ -100,11 +107,11 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         }
         case TYPE_WC:
             nfas[cur_index]
-                = tepsnfa_one_transition(WC_MATCHER(cur_token.payload));
+                = tepsnfa_one_transition(wc_matcher(cur_token.payload.wc));
             break;
         case TYPE_UOP:
             nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
-            switch (cur_token.payload) {
+            switch (cur_token.payload.op) {
             case OP_PLUS:
                 tepsnfa_concat(&nfas[cur_index], &nfas[left_index]);
                 tepsnfa_to_star(&nfas[cur_index]);
@@ -115,40 +122,31 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             case OP_OPT:
                 tepsnfa_to_opt(&nfas[cur_index]);
                 break;
+            default:
+                printf("error: bad unary operator %d\n", cur_token.payload.op);
+                exit(1);
             }
             break;
         case TYPE_BOP:
-            assert(
-                cur_token.payload == OP_CONCAT || cur_token.payload == OP_ALTER
-                || cur_token.payload == OP_BRK_ALTER
-            );
-            if (cur_token.payload == OP_CONCAT) {
+            if (cur_token.payload.op == OP_CONCAT) {
                 nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
                 tepsnfa_concat(&nfas[cur_index], &nfas[right_index]);
-            } else if (cur_token.payload == OP_ALTER) {
-                nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
-                tepsnfa_union(&nfas[cur_index], &nfas[right_index]);
-            } else {
-                /* bracket alter: expect one of the two epsnfas to be a
-                   one-transition epsnfa */
+            } else if (cur_token.payload.op == OP_ALTER) {
                 int is_left_one = nfas[left_index].state_num == 2;
                 int is_right_one = nfas[right_index].state_num == 2;
-                if (is_left_one && is_right_one) {
-                    nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
-                    tepsnfa_union(&nfas[cur_index], &nfas[right_index]);
-                } else if (is_left_one) {
+                if (is_left_one) {
                     nfas[cur_index] = tepsnfa_deepcopy(&nfas[right_index]);
-                    tepsnfa_bracket_union(&nfas[cur_index], &nfas[left_index]);
+                    tepsnfa_fast_union(&nfas[cur_index], &nfas[left_index]);
                 } else if (is_right_one) {
                     nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
-                    tepsnfa_bracket_union(&nfas[cur_index], &nfas[right_index]);
+                    tepsnfa_fast_union(&nfas[cur_index], &nfas[right_index]);
                 } else {
-                    printf(
-                        "bracket alter: none of the children is one-transition "
-                        "epsnfa\n"
-                    );
-                    exit(1);
+                    nfas[cur_index] = tepsnfa_deepcopy(&nfas[left_index]);
+                    tepsnfa_union(&nfas[cur_index], &nfas[right_index]);
                 }
+            } else {
+                printf("error: bad binary operator %d\n", cur_token.payload.op);
+                exit(1);
             }
             break;
         default:
@@ -161,6 +159,7 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
         }
     }
     result = tepsnfa_reduce_eps_as_epsnfa(&nfas[re_ast->root]);
+    result.char_class_pool = char_class_pool;
     for (i = 0; i < re_ast->size; i++) {
         tepsnfa_clear(&nfas[i]);
     }

@@ -1,99 +1,128 @@
 #include "re_parser.h"
-#include "orderedset.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
 /*
-    parse the bracket expression (the thing in side "[]")
-    
+    parse the bracket expression (the thing in side "[...]" or "[^...]")
+
     ```
         BRACKET_EXPR = CHAR_EXPR
                     | BRACKET_EXPR CHAR_EXPR
                     | BRACKET_EXPR RANGE_EXPR
                     ;
         RANGE_EXPR   = CHAR_EXPR '-' CHAR_EXPR;
-        CHAR_EXPR    = CHAR | '\' ESC_CHAR;  
-        ESC_CHAR     = '-' | ']' | '^' | 'n' | 'r' | 't' | 'v' | 'f';  
-        CHAR         = [all printables]  
+        CHAR_EXPR    = CHAR | '\' ESC_CHAR;
+        ESC_CHAR     = '-' | ']' | '^' | 'n' | 'r' | 't' | 'v' | 'f';
+        CHAR         = [all printables]
     ```
 
-    into an equivalent alter expression
-
-    ```
-        ALTER_EXPR = ALTER_EXPR '|' CHAR_EXPR | CHAR_EXPR;  
-        CHAR_EXPR  = CHAR | '\' ESC_EXPR;  
-        ESC_EXPR   = '.' | '+' | '*' | '?' | '|' | '(' | ')' | '{' | '\'
-                    | '^' | '$';  
-    ```
+    into an class matcher
 */
-dynarr_t
+char_class_t
 parse_bracket_expr(const char* input_str)
 {
-    dynarr_t output = dynarr_new(sizeof(re_token_t));
-    orderedset_t charset = orderedset_new(sizeof(char), NULL);
+    typedef struct bracket_token {
+        uint8_t is_range_char; // 1 if is range charactor "-", else 0
+        uint8_t byte;
+        int wc; // -1 if not wildcard
+    } bracket_token_t;
+    dynarr_t intermidiate = dynarr_new(sizeof(bracket_token_t));
+    char_class_t char_class = {
+        .bitmap = { 0 },
+        .is_negated = 0,
+    };
     size_t i, input_len = strlen(input_str);
     int j = 0, is_esc = 0, is_range = 0;
     char range_from = 0;
+
+    /* transform escaped char to intermidiate bracket_token token */
     for (i = 0; i < input_len; i++) {
         char c = input_str[i];
-        if (is_range) {
-            if (c < range_from) {
-                printf(
-                    "parse_bracket_expr: bad range: left '%c' is less than "
-                    "right '%c'",
-                    range_from, c
-                );
-                exit(1);
-            }
-            for (j = range_from; j <= c; j++) {
-                orderedset_add(&charset, &j);
-            }
-            is_range = 0;
-            continue;
-        } else if (is_esc) {
+        bracket_token_t t;
+        if (is_esc) {
             char* esc_char = strchr(BRACKET_ESC_CHARS, c);
+            char* wc_char = strchr(WC_ESC_CHARS, c);
             if (esc_char) {
-                orderedset_add(
-                    &charset,
-                    &BRACKET_ESC_CHARS_TO[esc_char - BRACKET_ESC_CHARS]
-                );
+                t = (bracket_token_t) {
+                    .is_range_char = 0,
+                    .byte = BRACKET_ESC_CHARS_TO[esc_char - BRACKET_ESC_CHARS],
+                    .wc = -1,
+                };
+                append(&intermidiate, &t);
+            } else if (wc_char) {
+                t = (bracket_token_t) {
+                    .is_range_char = 0,
+                    .byte = 0,
+                    .wc = wc_char - WC_ESC_CHARS,
+                };
+                append(&intermidiate, &t);
             } else {
                 printf("parse_bracket_expr: bad escape: '%c'", c);
                 exit(1);
             }
-            is_esc = 0;
-            continue;
-        }
-
-        if (c == '\\') {
+        } else if (c == '\\') {
             is_esc = 1;
         } else if (c == '-') {
-            if (i == 0 || i == input_len - 1) {
-                printf("parse_bracket_expr: incomplete range expression\n");
-                exit(1);
-            }
-            range_from = input_str[i - 1];
-            is_range = 1;
+            t = (bracket_token_t) {
+                .is_range_char = 1,
+                .byte = 0,
+                .wc = -1,
+            };
+            append(&intermidiate, &t);
         } else {
-            orderedset_add(&charset, &c);
+            t = (bracket_token_t) {
+                .is_range_char = 0,
+                .byte = c,
+                .wc = -1,
+            };
+            append(&intermidiate, &t);
         }
     }
 
-    for (j = 0; j < charset.size; j++) {
-        re_token_t t;
-        if (j != 0) {
-            t = (re_token_t) { .type = TYPE_BOP, .payload = OP_BRK_ALTER };
-            append(&output, &t);
+    memset(char_class.bitmap, 0, 32 * sizeof(unsigned char));
+    for (i = 0; i < intermidiate.size; i++) {
+        bracket_token_t* t = at(&intermidiate, i);
+        if (is_range) {
+            if (t->wc != -1 || t->is_range_char) {
+                fprintf(stderr, "bracket expr: bad range\n");
+                exit(1);
+            }
+            if (t->byte < range_from) {
+                printf(
+                    "bracket expr: bad range: left '%c' < right '%c'\n",
+                    range_from, t->byte
+                );
+                exit(1);
+            }
+            for (j = range_from; j <= t->byte; j++) {
+                char_class_set(&char_class, j);
+            }
+            is_range = 0;
+        } else if (t->is_range_char) {
+            if (i == 0 || i == input_len - 1) {
+                printf("bracket expr: incomplete range expression\n");
+                exit(1);
+            } else {
+                bracket_token_t* prev_t = at(&intermidiate, i - 1);
+                if (prev_t->wc != -1 || prev_t->is_range_char) {
+                    fprintf(stderr, "bracket expr: bad range\n");
+                    exit(1);
+                }
+                range_from = t->byte;
+                is_range = 1;
+            }
+        } else if (t->wc != -1) {
+            for (j = 0; j < 256; j++) {
+                if (match_wc(t->wc, j)) {
+                    char_class_set(&char_class, j);
+                }
+            }
+        } else {
+            char_class_set(&char_class, t->byte);
         }
-        t = (re_token_t) {
-            .type = TYPE_LIT,
-            .payload = ((char*)charset.data)[j],
-        };
-        append(&output, &t);
     }
-    orderedset_free(&charset);
-    return output;
+    return char_class;
 }
 
 dynarr_t
@@ -101,7 +130,7 @@ tokenization(const char* input_str)
 {
     size_t i, input_size = strlen(input_str);
     if (input_size > RE_STR_LEN_LIMIT) {
-        printf("regexp str too long: %lu > %d\n",input_size, RE_STR_LEN_LIMIT);
+        printf("regexp str too long: %lu > %d\n", input_size, RE_STR_LEN_LIMIT);
         exit(1);
     }
     int can_add_concat = 0;
@@ -112,37 +141,43 @@ tokenization(const char* input_str)
     int dup_min = -1, dup_max = -1, dup_str_len = 0, is_dup_have_sep = 0;
     char dup_str[DUP_STR_MAX_LEN + 1];
 
-    int brk_str_len = 0, brk_is_esc = 0;
+    int brk_str_len = 0, brk_is_esc = 0, brk_is_neg = 0;
     char brk_str[BRACKET_STR_MAX_LEN + 1];
 
     re_token_t t;
-    const re_token_t CONCAT_OP = { .type = TYPE_BOP, .payload = OP_CONCAT };
-    dynarr_t input = dynarr_new(sizeof(re_token_t));
+    const re_token_t CONCAT_OP = {
+        .type = TYPE_BOP,
+        .payload = { .op = OP_CONCAT },
+    };
+    dynarr_t tokens = dynarr_new(sizeof(re_token_t));
 
     for (i = 0; i < input_size; i++) {
         char c = input_str[i];
         /* ESCAPE STATE */
         if (cur_state == ST_ESC) {
-            if (IS_LIT_ESC(c)) {
-                t = (re_token_t) { .type = TYPE_LIT, .payload = c };
+            if (strchr(BYTE_ESC_CHARS, c)) {
+                t = (re_token_t) {
+                    .type = TYPE_BYTE,
+                    .payload = { .byte = c },
+                };
             } else if (c == ANCHOR_WEDGE_CHAR) {
                 t = (re_token_t) {
                     .type = TYPE_ANCHOR,
-                    .payload = ANCHOR_WEDGE,
+                    .payload = { .anch = ANCHOR_WEDGE },
                 };
             } else {
-                char* nonprint = IS_NONPRINT_ESC(c);
+                char* np = IS_NONPRINT_ESC(c);
                 char* wc = IS_WC_ESC(c);
-                if (nonprint) {
+                if (np) {
+                    uint8_t b = NONPRINT_ESC_CHARS_TO[np - NONPRINT_ESC_CHARS];
                     t = (re_token_t) {
-                        .type = TYPE_LIT,
-                        .payload
-                        = NONPRINT_ESC_CHARS_TO[nonprint - NONPRINT_ESC_CHARS],
+                        .type = TYPE_BYTE,
+                        .payload = { .byte = b },
                     };
                 } else if (wc) {
                     t = (re_token_t) {
                         .type = TYPE_WC,
-                        .payload = wc - WC_ESC_CHARS,
+                        .payload = { .wc = wc - WC_ESC_CHARS },
                     };
                 } else {
                     printf("error: bad escape sequence '%c'\n", c);
@@ -150,9 +185,9 @@ tokenization(const char* input_str)
                 }
             }
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
             can_add_concat = 1;
             cur_state = ST_NORM;
             continue;
@@ -160,13 +195,16 @@ tokenization(const char* input_str)
         /* DUPLICATION STATE */
         else if (cur_state == ST_DUP) {
             if (c == DUP_END) {
-                t = (re_token_t) { .type = TYPE_DUP, .payload = 0 };
+                t = (re_token_t) {
+                    .type = TYPE_DUP,
+                    .payload = { .dup = { .min = 0, .max = 0 } },
+                };
                 dup_str[dup_str_len] = '\0';
                 if (is_dup_have_sep == 1) {
-                    t.payload = dup_min;
+                    t.payload.dup.min = dup_min;
                     /* if dup_str is empty (the "{m,}" format),
                     dup_max should be 0 to indicate "no maximum" */
-                    t.payload2 = (dup_str_len == 0)
+                    t.payload.dup.max = (dup_str_len == 0)
                         ? DUP_NO_MAX
                         : atoi_check_dup_max(dup_str);
                 } else {
@@ -177,9 +215,9 @@ tokenization(const char* input_str)
                     }
                     /* the "{m}" format */
                     dup_min = atoi_check_dup_max(dup_str);
-                    t.payload = t.payload2 = dup_min;
+                    t.payload.dup.min = t.payload.dup.max = dup_min;
                 }
-                append(&input, &t);
+                append(&tokens, &t);
                 can_add_concat = 1;
                 cur_state = ST_NORM;
             } else if (c == DUP_SEP) {
@@ -214,47 +252,57 @@ tokenization(const char* input_str)
         }
         /* BRACKET STATE */
         else if (cur_state == ST_BRK) {
-            if (c == '\\') {
+            if (c == '^') {
+                if (brk_str_len == 0) {
+                    brk_is_neg = 1;
+                } else if (brk_is_esc) {
+                    brk_str_len++;
+                    brk_is_esc = 0;
+                } else {
+                    printf(
+                        "bracket expr: \"^\" should appear at the "
+                        "begining of braket or escaped\n"
+                    );
+                    exit(1);
+                }
+            } else if (c == '\\') {
                 brk_is_esc = 1;
             } else if (c == ']') {
-                if (brk_is_esc) {
-                    brk_str_len++;
-                    continue;
-                }
                 if (brk_str_len > BRACKET_STR_MAX_LEN) {
                     printf(
-                        "bracket expression too long (>%d)", BRACKET_STR_MAX_LEN
+                        "bracket expr too long (>%d)\n", BRACKET_STR_MAX_LEN
                     );
                     exit(1);
                 }
                 if (brk_str_len == 0) {
-                    printf("bracket expression is empty");
+                    printf("bracket expr: is empty\n");
                     exit(1);
+                }
+                if (brk_is_esc) {
+                    brk_str_len++;
+                    brk_is_esc = 0;
+                    continue;
                 }
                 strncpy(brk_str, input_str + i - brk_str_len, brk_str_len);
                 brk_str[brk_str_len] = '\0';
                 {
-                    dynarr_t alter_exprs = parse_bracket_expr(brk_str);
-                    size_t j;
+                    char_class_t char_class = parse_bracket_expr(brk_str);
+                    char_class.is_negated = brk_is_neg;
                     if (can_add_concat) {
-                        append(&input, &CONCAT_OP);
+                        append(&tokens, &CONCAT_OP);
                     }
-
-                    t = (re_token_t) { .type = TYPE_LP };
-                    append(&input, &t);
-                    for (j = 0; j < alter_exprs.size; j++) {
-                        append(&input, at(&alter_exprs, j));
-                    }
-                    t = (re_token_t) { .type = TYPE_RP };
-                    append(&input, &t);
-
+                    t = (re_token_t) {
+                        .type = TYPE_CLASS,
+                        .payload = { .class = char_class },
+                    };
+                    append(&tokens, &t);
                     can_add_concat = 1;
                     cur_state = ST_NORM;
-                    dynarr_free(&alter_exprs);
                 }
                 cur_state = ST_NORM;
             } else {
                 brk_str_len++;
+                brk_is_esc = 0;
             }
             continue;
         }
@@ -265,24 +313,31 @@ tokenization(const char* input_str)
         } else if (c == '[') {
             cur_state = ST_BRK;
             brk_str_len = 0;
+            brk_is_neg = 0;
         } else if (c == WC_ANY_CHAR) {
-            t = (re_token_t) { .type = TYPE_WC, .payload = WC_ANY };
+            t = (re_token_t) { .type = TYPE_WC, .payload = { .wc = WC_ANY } };
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
         } else if (c == ANCHOR_START_CHAR) {
-            t = (re_token_t) { .type = TYPE_ANCHOR, .payload = ANCHOR_START };
+            t = (re_token_t) {
+                .type = TYPE_ANCHOR,
+                .payload = { .anch = ANCHOR_START },
+            };
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
         } else if (c == ANCHOR_END_CHAR) {
-            t = (re_token_t) { .type = TYPE_ANCHOR, .payload = ANCHOR_END };
+            t = (re_token_t) {
+                .type = TYPE_ANCHOR,
+                .payload = { .anch = ANCHOR_END },
+            };
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
         } else if (c == DUP_START) {
             cur_state = ST_DUP;
             dup_min = dup_max = -1;
@@ -291,28 +346,31 @@ tokenization(const char* input_str)
         } else if (IS_UOP(c)) {
             t = (re_token_t) {
                 .type = TYPE_UOP,
-                .payload = strchr(OP_CHARS, c) - OP_CHARS,
+                .payload = { .op = strchr(OP_CHARS, c) - OP_CHARS },
             };
-            append(&input, &t);
+            append(&tokens, &t);
         } else if (IS_BOP(c)) {
-            t = (re_token_t) { .type = TYPE_BOP, .payload = OP_ALTER };
-            append(&input, &t);
+            t = (re_token_t) {
+                .type = TYPE_BOP,
+                .payload = { .op = OP_ALTER },
+            };
+            append(&tokens, &t);
             can_add_concat = 0;
         } else if (c == '(') {
             t = (re_token_t) { .type = TYPE_LP };
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
         } else if (c == ')') {
             t = (re_token_t) { .type = TYPE_RP };
-            append(&input, &t);
+            append(&tokens, &t);
         } else {
-            t = (re_token_t) { .type = TYPE_LIT, .payload = c };
+            t = (re_token_t) { .type = TYPE_BYTE, .payload = { .byte = c } };
             if (can_add_concat) {
-                append(&input, &CONCAT_OP);
+                append(&tokens, &CONCAT_OP);
             }
-            append(&input, &t);
+            append(&tokens, &t);
         }
 
         /* update can add concat */
@@ -320,7 +378,7 @@ tokenization(const char* input_str)
             can_add_concat = !(IS_BOP(c) || c == '(');
         }
     }
-    return input;
+    return tokens;
 }
 
 inline int
@@ -370,7 +428,8 @@ parse_regex(const char* input_str, const int is_debug)
                    && stack_top->type != TYPE_LP
                    /* parenthese's precedence < all operators */
                    && cur_token->type != TYPE_LP
-                   && OP_PRECED_LT(stack_top->payload, cur_token->payload)) {
+                   && OP_PRECED_LT(stack_top->payload.op, cur_token->payload.op)
+            ) {
                 append(&output, stack_top);
                 pop(&op_stack);
                 stack_top = back(&op_stack);
@@ -440,9 +499,10 @@ parse_regex(const char* input_str, const int is_debug)
     for (i = 0; i < output.size; i++) {
         re_token_t* cur_token = &ast.tokens[i];
         switch (cur_token->type) {
-        case TYPE_LIT:
+        case TYPE_BYTE:
         case TYPE_WC:
         case TYPE_ANCHOR:
+        case TYPE_CLASS:
             append(&index_stack, &i);
             break;
         case TYPE_UOP:
