@@ -1,6 +1,6 @@
 # NacRE
 
-NaRE is a lightweight, NFA-based regular expression engine that supports a subset of regex syntax. It is designed to parse and match patterns efficiently using NFA.
+NacRE is a lightweight, NFA-based regular expression engine that supports a subset of regex syntax. It is designed to parse and match patterns efficiently using NFA.
 
 ## Supported Syntax
 
