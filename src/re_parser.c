@@ -27,12 +27,13 @@ parse_bracket_expr(const char* input_str)
         uint8_t byte;
         int wc; // -1 if not wildcard
     } bracket_token_t;
+    const size_t input_len = strlen(input_str);
     dynarr_t intermidiate = dynarr_new(sizeof(bracket_token_t));
     char_class_t char_class = {
         .bitmap = { 0 },
         .is_negated = 0,
     };
-    size_t i, input_len = strlen(input_str);
+    size_t i;
     int j = 0, is_esc = 0, is_range = 0;
     char range_from = 0;
 
@@ -397,7 +398,7 @@ atoi_check_dup_max(const char dup_str[DUP_STR_MAX_LEN])
 re_ast_t
 parse_regex(const char* input_str, const int is_debug)
 {
-    int i, j;
+    size_t i, j;
     /* list of re_token_t */
     dynarr_t input_tokens, postfix_tokens;
     dynarr_t op_stack, index_stack;
@@ -526,7 +527,7 @@ parse_regex(const char* input_str, const int is_debug)
         }
 
         if (is_debug) {
-            printf("%d cur_token: ", i);
+            printf("%lu cur_token: ", i);
             re_token_print(*cur_token);
             printf("index_stack:\n");
             for (j = 0; j < index_stack.size; j++) {
@@ -537,7 +538,7 @@ parse_regex(const char* input_str, const int is_debug)
     }
     if (index_stack.size != 1) {
         printf(
-            "error when making ast: index stack size is %d at the end\n",
+            "error when making ast: index stack size is %lu at the end\n",
             index_stack.size
         );
         exit(1);

@@ -1,5 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
+#include <assert.h>
 
 #ifndef DYNARR_H
 #define DYNARR_H
@@ -9,9 +12,9 @@
 #define DYN_ARR_INIT_CAP 2
 
 typedef struct dynarr {
-    unsigned short elem_size;
-    unsigned short size;
-    unsigned short cap;
+    size_t elem_size;
+    size_t size;
+    size_t cap;
     void* data;
 } dynarr_t;
 
@@ -78,6 +81,7 @@ static inline void
 append(dynarr_t* x, const void* const elem)
 {
     // if (x->data == NULL) return;
+    assert(x->size < INT32_MAX);
     if (x->size == x->cap) {
         x->cap *= 2;
         x->data = realloc(x->data, x->elem_size * x->cap);

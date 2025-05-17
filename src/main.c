@@ -129,7 +129,7 @@ main(int argc, char* argv[])
     /* read the file into a buffer with a size limit and find matches */
     {
         char* buffer = malloc(MAX_INPUT_BUF_SIZE + 1);
-        size_t bytes_read;
+        size_t i, bytes_read;
         dynarr_t matches;
         if (!buffer) {
             perror("Error allocating memory for buffer");
@@ -146,7 +146,7 @@ main(int argc, char* argv[])
                 matches = epsnfa_find_matches(&nfa, buffer, mflag.global);
             }
             /* print all matches */
-            for (size_t i = 0; i < matches.size; i++) {
+            for (i = 0; i < matches.size; i++) {
                 print_match(buffer, *(match_t*)at(&matches, i));
             }
             dynarr_free(&matches);

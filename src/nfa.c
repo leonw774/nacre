@@ -27,13 +27,13 @@ tepsnfa_one_transition(matcher_t m)
     return res;
 }
 
-int
+size_t
 tepsnfa_print(tepsnfa* self)
 {
-    int i, j, byte_count = 0;
+    size_t i, j, byte_count = 0;
     byte_count += printf("--- PRINT T-EPSNFA ---\n");
     byte_count += printf(
-        "Number of state: %d\nStarting state: %d\nFinal states: %d\n"
+        "Number of state: %lu\nStarting state: %lu\nFinal states: %lu\n"
         "Transitions:\nstateDiagram\n",
         self->state_num, self->start_state, self->final_state
     );
@@ -42,11 +42,11 @@ tepsnfa_print(tepsnfa* self)
         for (j = 0; j < transitions->size; j++) {
             transition_t* t = at(transitions, j);
             byte_count += printf(
-                "  %d --> %d: %s\n", i, t->to_state, get_matcher_str(t->matcher)
+                "  %lu --> %lu: %s\n", i, t->to_state, get_matcher_str(t->matcher)
             );
         }
     }
-    byte_count += printf("----22----------------\n");
+    byte_count += printf("----------------------\n");
     fflush(stdout);
     return byte_count;
 }
@@ -54,7 +54,7 @@ tepsnfa_print(tepsnfa* self)
 void
 tepsnfa_clear(tepsnfa* self)
 {
-    int i;
+    size_t i;
     for (i = 0; i < self->state_transitions.size; i++) {
         dynarr_free((dynarr_t*)at(&self->state_transitions, i));
     }
@@ -73,10 +73,10 @@ tepsnfa_add_state(tepsnfa* self)
 }
 
 void
-tepsnfa_add_transition(tepsnfa* self, int from, matcher_t matcher, int to)
+tepsnfa_add_transition(tepsnfa* self, size_t from, matcher_t matcher, size_t to)
 {
     dynarr_t* from_transition_set = at(&self->state_transitions, from);
-    int i;
+    size_t i;
     /* check repetition */
     for (i = 0; i < from_transition_set->size; i++) {
         transition_t* t = at(from_transition_set, i);
@@ -92,7 +92,7 @@ tepsnfa_add_transition(tepsnfa* self, int from, matcher_t matcher, int to)
 tepsnfa
 tepsnfa_deepcopy(const tepsnfa* self)
 {
-    int i;
+    size_t i, j;
     tepsnfa copy = {
         .state_num = self->state_num,
         .start_state = self->start_state,
@@ -102,7 +102,6 @@ tepsnfa_deepcopy(const tepsnfa* self)
     for (i = 0; i < self->state_transitions.size; i++) {
         dynarr_t* from_transition_set = at(&self->state_transitions, i);
         dynarr_t to_transition_set = dynarr_new(sizeof(transition_t));
-        int j;
         for (j = 0; j < from_transition_set->size; j++) {
             append(&to_transition_set, at(from_transition_set, j));
         }
@@ -114,7 +113,7 @@ tepsnfa_deepcopy(const tepsnfa* self)
 void
 tepsnfa_concat(tepsnfa* self, const tepsnfa* right)
 {
-    int i, j;
+    size_t i, j;
     transition_t new_t;
     /* append right's transition to self */
     for (i = 0; i < right->state_transitions.size; i++) {
@@ -148,9 +147,9 @@ tepsnfa_concat(tepsnfa* self, const tepsnfa* right)
 void
 tepsnfa_union(tepsnfa* self, const tepsnfa* right)
 {
-    int i, j;
-    int new_start = self->state_num + right->state_num;
-    int new_final = new_start + 1;
+    size_t i, j;
+    size_t new_start = self->state_num + right->state_num;
+    size_t new_final = new_start + 1;
     /* append right's transition to self */
     for (i = 0; i < right->state_transitions.size; i++) {
         dynarr_t* from_transition_set = at(&right->state_transitions, i);
@@ -191,7 +190,7 @@ tepsnfa_union(tepsnfa* self, const tepsnfa* right)
 void
 tepsnfa_fast_union(tepsnfa* self, const tepsnfa* right)
 {
-    int i, j;
+    size_t i, j;
     assert(right->state_transitions.size == 2);
     dynarr_t* right_start_transition_set
         = at(&right->state_transitions, right->start_state);
@@ -224,8 +223,8 @@ tepsnfa_fast_union(tepsnfa* self, const tepsnfa* right)
 void
 tepsnfa_to_star(tepsnfa* self)
 {
-    int star_start = self->state_num;
-    int star_final = self->state_num + 1;
+    size_t star_start = self->state_num;
+    size_t star_final = self->state_num + 1;
     tepsnfa_add_state(self);
     tepsnfa_add_state(self);
     /* add eps from star-start to self-start */
@@ -255,7 +254,7 @@ tepsnfa_to_opt(tepsnfa* self)
 epsnfa
 tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
 {
-    int i, j;
+    size_t i, j;
     epsnfa temp, output;
     int* state_map = malloc(input->state_num * sizeof(int));
     int* state_degrees = calloc(input->state_num, sizeof(int));
@@ -388,7 +387,7 @@ tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
 }
 
 epsnfa
-epsnfa_new(const int state_num)
+epsnfa_new(const size_t state_num)
 {
     assert(state_num > 0);
     return (epsnfa) {
@@ -406,13 +405,14 @@ epsnfa_new(const int state_num)
 }
 
 void
-epsnfa_get_eps_closure(epsnfa* self, int state, bitmask_t* closure)
+epsnfa_get_eps_closure(epsnfa* self, size_t state, bitmask_t* closure)
 {
     if (bitmask_contains(closure, state)) {
         return;
     }
     bitmask_add(closure, state);
-    for (int i = 0; i < self->state_num; i++) {
+    size_t i;
+    for (i = 0; i < self->state_num; i++) {
         matcher_t m = self->transition_table[state * self->state_num + i];
         /* use "==" because need to exclude anchor */
         if (m.flag == MATCHER_FLAG_EPS) {
@@ -422,9 +422,9 @@ epsnfa_get_eps_closure(epsnfa* self, int state, bitmask_t* closure)
 }
 
 void
-epsnfa_reduce_eps(epsnfa* self, int state)
+epsnfa_reduce_eps(epsnfa* self, size_t state)
 {
-    int i, j;
+    size_t i, j;
     bitmask_t closure = bitmask_new(self->state_num);
 
     /* get epsilon closure of s */
@@ -491,23 +491,23 @@ epsnfa_reduce_eps(epsnfa* self, int state)
 void
 epsnfa_print(epsnfa* self)
 {
-    int i, j;
+    size_t i, j;
     printf("---- PRINT EPSNFA ----\n");
-    printf("Number of state: %d\nStarting state:\n", self->state_num);
+    printf("Number of state: %lu\nStarting state:\n", self->state_num);
     for (i = 0; i < self->state_num; i++) {
         if (bitmask_contains(&self->is_start, i)) {
-            printf(" %d", i);
+            printf(" %lu", i);
         }
     }
     printf("\nFinal states:\n");
     for (i = 0; i < self->state_num; i++) {
         if (bitmask_contains(&self->is_finish, i)) {
-            printf(" %d", i);
+            printf(" %lu", i);
         }
     }
     printf("\nCharactor classes:\n");
     for (i = 0; i < self->char_class_pool.size; i++) {
-        printf("#%d ", i);
+        printf("#%lu ", i);
     }
     printf("\nTransitions:\n\nstateDiagram\n");
     for (i = 0; i < self->state_num; i++) {
@@ -515,7 +515,7 @@ epsnfa_print(epsnfa* self)
             int k = i * self->state_num + j;
             matcher_t m = self->transition_table[k];
             if (m.flag) {
-                printf("  %d --> %d: %s\n", i, j, get_matcher_str(m));
+                printf("  %lu --> %lu: %s\n", i, j, get_matcher_str(m));
             }
         }
     }
@@ -540,12 +540,11 @@ epsnfa_find_initial_match(
 )
 {
     typedef struct memory {
-        int cur_state;
-        int depth;
+        size_t cur_state;
+        size_t depth;
         size_t pos; /* the position in input string */
     } memory_t;
-    int i;
-    size_t matched_len = 0;
+    size_t i, matched_len = 0;
     dynarr_t stack = dynarr_new(sizeof(memory_t));
 #ifdef VERBOSE_MATCH
     printf("start_offset: %lu\n", start_offset);
@@ -591,7 +590,7 @@ epsnfa_find_initial_match(
         for (i = 0; i < self->state_num; i++) {
             anchor_byte behind, ahead;
             int is_matched = 0;
-            int k = cur_mem.cur_state * self->state_num + i;
+            size_t k = cur_mem.cur_state * self->state_num + i;
             matcher_t m = self->transition_table[k];
             if (m.flag == MATCHER_FLAG_NIL) {
                 continue;
@@ -652,17 +651,17 @@ epsnfa_find_matches(
 {
     const size_t input_len = strlen(input);
     size_t start = 0, line_num = 1, col_num = 1, match_len = 0, i = 0;
-    dynarr_t results = dynarr_new(sizeof(match_t));
+    dynarr_t matches = dynarr_new(sizeof(match_t));
     for (start = 0; start < input_len; start += (match_len ? match_len : 1)) {
         match_len = epsnfa_find_initial_match(epsnfa, input, input_len, start);
         if (match_len) {
-            match_t result = {
+            match_t m = {
                 .offset = start,
                 .length = match_len,
                 .line = line_num,
                 .col = col_num,
             };
-            append(&results, &result);
+            append(&matches, &m);
             if (!is_global) {
                 break;
             }
@@ -677,7 +676,7 @@ epsnfa_find_matches(
             }
         }
     }
-    return results;
+    return matches;
 }
 
 dynarr_t
@@ -688,8 +687,7 @@ epsnfa_find_matches_multiline(
     const size_t input_len = strlen(input);
     size_t line_start = 0, line_end = 0, line_num = 1, line_len = 0;
     size_t match_len = 0, i = 0;
-    dynarr_t results = dynarr_new(sizeof(match_t));
-
+    dynarr_t matches = dynarr_new(sizeof(match_t));
     while (line_start < input_len) {
         while (input[line_end] != '\0' && input[line_end] != '\n') {
             line_end++;
@@ -697,13 +695,13 @@ epsnfa_find_matches_multiline(
         for (i = 0; i < line_len; i++) {
             match_len = epsnfa_find_initial_match(epsnfa, input, line_len, i);
             if (match_len) {
-                match_t result = {
+                match_t m = {
                     .offset = i,
                     .length = match_len,
                     .line = line_num,
                     .col = i + 1,
                 };
-                append(&results, &result);
+                append(&matches, &m);
                 if (!is_global) {
                     break;
                 }
@@ -712,5 +710,5 @@ epsnfa_find_matches_multiline(
         line_num++;
         line_start = line_end + 1;
     }
-    return results;
+    return matches;
 }
