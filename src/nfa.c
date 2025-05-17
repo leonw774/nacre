@@ -42,7 +42,8 @@ tepsnfa_print(tepsnfa* self)
         for (j = 0; j < transitions->size; j++) {
             transition_t* t = at(transitions, j);
             byte_count += printf(
-                "  %lu --> %lu: %s\n", i, t->to_state, get_matcher_str(t->matcher)
+                "  %lu --> %lu: %s\n", i, t->to_state,
+                get_matcher_str(t->matcher)
             );
         }
     }
@@ -692,11 +693,14 @@ epsnfa_find_matches_multiline(
         while (input[line_end] != '\0' && input[line_end] != '\n') {
             line_end++;
         }
+        line_len = line_end - line_start;
         for (i = 0; i < line_len; i++) {
-            match_len = epsnfa_find_initial_match(epsnfa, input, line_len, i);
+            match_len = epsnfa_find_initial_match(
+                epsnfa, &input[line_start], line_len, i
+            );
             if (match_len) {
                 match_t m = {
-                    .offset = i,
+                    .offset = line_start + i,
                     .length = match_len,
                     .line = line_num,
                     .col = i + 1,
@@ -709,6 +713,7 @@ epsnfa_find_matches_multiline(
         }
         line_num++;
         line_start = line_end + 1;
+        line_end = line_start;
     }
     return matches;
 }
