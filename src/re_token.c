@@ -1,4 +1,4 @@
-#include "re.h"
+#include "re_token.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -85,20 +85,3 @@ re_token_print(re_token_t token)
     byte_count += printf("}\n");
     return byte_count;
 };
-
-void
-re_ast_free(re_ast_t* ast)
-{
-    if (ast == NULL) {
-        return;
-    }
-    if (ast->tokens) {
-        free(ast->tokens);
-    }
-    if (ast->lefts != NULL) {
-        free(ast->lefts);
-    }
-    if (ast->rights != NULL) {
-        free(ast->rights);
-    }
-}

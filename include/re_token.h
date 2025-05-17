@@ -1,10 +1,8 @@
-#include "dynarr.h"
 #include "char_class.h"
 #include <stdint.h>
-#include <stdlib.h>
 
-#ifndef RE_H
-#define RE_H
+#ifndef RE_TOKEN_H
+#define RE_TOKEN_H
 
 enum re_token_type {
     TYPE_BYTE, /* byte */
@@ -105,15 +103,5 @@ typedef struct re_token {
 #define token_size sizeof(re_token_t)
 
 extern int re_token_print(re_token_t token);
-
-typedef struct re_ast {
-    re_token_t* tokens;
-    int* lefts;
-    int* rights;
-    int size;
-    int root;
-} re_ast_t;
-
-void re_ast_free(re_ast_t* ast);
 
 #endif

@@ -1,15 +1,19 @@
 #include "dynarr.h"
 #include "bitmask.h"
 #include "matcher.h"
-#include "orderedset.h"
-#include "transition.h"
 
 #ifndef NFA_H
 #define NFA_H
 
 #define NFA_STATE_NUM_LIMIT 65535
 
-/* Thompson epsilon-NFA: edge stored as linked-lists */
+typedef struct transition {
+    matcher_t matcher;
+    int to_state;
+} transition_t;
+
+/* Thompson epsilon-NFA: only one start and one finish.
+   edge stored as linked-lists */
 typedef struct tepsnfa {
     int state_num;
     int start_state;
@@ -59,7 +63,7 @@ void tepsnfa_to_star(tepsnfa* self);
 /* r -> r? */
 void tepsnfa_to_opt(tepsnfa* self);
 
-epsnfa tepsnfa_reduce_eps_as_epsnfa(tepsnfa* input);
+epsnfa tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input);
 
 
 /* Epsilon-NFA methods */
@@ -74,13 +78,30 @@ void epsnfa_print(epsnfa* self);
 
 void epsnfa_clear(epsnfa* self);
 
+typedef struct match {
+    size_t offset;
+    size_t length;
+    size_t line;
+    size_t col;
+} match_t;
+
 #define MATCH_SEARCH_DEPTH_LIMIT 100000
 
 /* return n if n is the smallest integer such that input_str[0:n] matches
    return -1 if no match found */
-size_t epsnfa_match(
+size_t epsnfa_find_initial_match(
     const epsnfa* self, const char* input_str, const size_t intput_len,
     const size_t start_offset
+);
+
+dynarr_t
+epsnfa_find_matches(
+    const epsnfa* epsnfa, const char* input, const int is_global
+);
+
+dynarr_t
+epsnfa_find_matches_multiline(
+    const epsnfa* epsnfa, const char* input, const int is_global
 );
 
 #endif

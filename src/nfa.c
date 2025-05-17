@@ -253,7 +253,7 @@ tepsnfa_to_opt(tepsnfa* self)
 }
 
 epsnfa
-tepsnfa_reduce_eps_as_epsnfa(tepsnfa* input)
+tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
 {
     int i, j;
     epsnfa temp, output;
@@ -401,7 +401,7 @@ epsnfa_new(const int state_num)
             .cap = 0,
             .data = NULL,
             .elem_size = 0,
-        }
+        },
     };
 }
 
@@ -534,7 +534,7 @@ epsnfa_clear(epsnfa* self)
 /* return n if n is the largest integer such that input_str[0:n] matches
    return 0 if no match found */
 size_t
-epsnfa_match(
+epsnfa_find_initial_match(
     const epsnfa* self, const char* input_str, const size_t intput_len,
     const size_t start_offset
 )
@@ -643,4 +643,74 @@ epsnfa_match(
     }
     dynarr_free(&stack);
     return matched_len;
+}
+
+dynarr_t
+epsnfa_find_matches(
+    const epsnfa* epsnfa, const char* input, const int is_global
+)
+{
+    const size_t input_len = strlen(input);
+    size_t start = 0, line_num = 1, col_num = 1, match_len = 0, i = 0;
+    dynarr_t results = dynarr_new(sizeof(match_t));
+    for (start = 0; start < input_len; start += (match_len ? match_len : 1)) {
+        match_len = epsnfa_find_initial_match(epsnfa, input, input_len, start);
+        if (match_len) {
+            match_t result = {
+                .offset = start,
+                .length = match_len,
+                .line = line_num,
+                .col = col_num,
+            };
+            append(&results, &result);
+            if (!is_global) {
+                break;
+            }
+        }
+        /* update line and col between start to start + match_len */
+        for (i = 0; i < (match_len ? match_len : 1); i++) {
+            if (start && input[i + start - 1] == '\n') {
+                line_num++;
+                col_num = 1;
+            } else {
+                col_num++;
+            }
+        }
+    }
+    return results;
+}
+
+dynarr_t
+epsnfa_find_matches_multiline(
+    const epsnfa* epsnfa, const char* input, const int is_global
+)
+{
+    const size_t input_len = strlen(input);
+    size_t line_start = 0, line_end = 0, line_num = 1, line_len = 0;
+    size_t match_len = 0, i = 0;
+    dynarr_t results = dynarr_new(sizeof(match_t));
+
+    while (line_start < input_len) {
+        while (input[line_end] != '\0' && input[line_end] != '\n') {
+            line_end++;
+        }
+        for (i = 0; i < line_len; i++) {
+            match_len = epsnfa_find_initial_match(epsnfa, input, line_len, i);
+            if (match_len) {
+                match_t result = {
+                    .offset = i,
+                    .length = match_len,
+                    .line = line_num,
+                    .col = i + 1,
+                };
+                append(&results, &result);
+                if (!is_global) {
+                    break;
+                }
+            }
+        }
+        line_num++;
+        line_start = line_end + 1;
+    }
+    return results;
 }

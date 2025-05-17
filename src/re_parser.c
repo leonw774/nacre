@@ -126,7 +126,7 @@ parse_bracket_expr(const char* input_str)
 }
 
 dynarr_t
-tokenization(const char* input_str)
+tokenize(const char* input_str)
 {
     size_t i, input_size = strlen(input_str);
     if (input_size > RE_STR_LEN_LIMIT) {
@@ -398,27 +398,28 @@ re_ast_t
 parse_regex(const char* input_str, const int is_debug)
 {
     int i, j;
-    dynarr_t input, output;
+    /* list of re_token_t */
+    dynarr_t input_tokens, postfix_tokens;
     dynarr_t op_stack, index_stack;
     re_ast_t ast = {
         .tokens = NULL, .lefts = NULL, .rights = NULL, .size = 0, .root = -1
     };
 
     /* tokenization */
-    input = tokenization(input_str);
+    input_tokens = tokenize(input_str);
 
     if (is_debug) {
-        printf("--- input ---\n");
-        for (i = 0; i < input.size; i++) {
-            re_token_print(*(re_token_t*)at(&input, i));
+        printf("--- input_tokens ---\n");
+        for (i = 0; i < input_tokens.size; i++) {
+            re_token_print(*(re_token_t*)at(&input_tokens, i));
         }
     }
 
     /* transform to postfix notation with shunting yard algorithm */
-    output = dynarr_new(sizeof(re_token_t));
+    postfix_tokens = dynarr_new(sizeof(re_token_t));
     op_stack = dynarr_new(sizeof(re_token_t));
-    for (i = 0; i < input.size; i++) {
-        re_token_t* cur_token = at(&input, i);
+    for (i = 0; i < input_tokens.size; i++) {
+        re_token_t* cur_token = at(&input_tokens, i);
         if (cur_token->type == TYPE_BOP || cur_token->type == TYPE_LP) {
             /* binary operator and left parenthese */
             /* pop stack to output until top is left parenthese or
@@ -430,7 +431,7 @@ parse_regex(const char* input_str, const int is_debug)
                    && cur_token->type != TYPE_LP
                    && OP_PRECED_LT(stack_top->payload.op, cur_token->payload.op)
             ) {
-                append(&output, stack_top);
+                append(&postfix_tokens, stack_top);
                 pop(&op_stack);
                 stack_top = back(&op_stack);
             }
@@ -441,7 +442,7 @@ parse_regex(const char* input_str, const int is_debug)
             /* pop stack and push to output until top is left braclet */
             re_token_t* stack_top = back(&op_stack);
             while (stack_top != NULL && stack_top->type != TYPE_LP) {
-                append(&output, stack_top);
+                append(&postfix_tokens, stack_top);
                 pop(&op_stack);
                 stack_top = back(&op_stack);
             }
@@ -452,14 +453,14 @@ parse_regex(const char* input_str, const int is_debug)
             }
         } else {
             /* unary operator, wildcard, and literal */
-            append(&output, cur_token);
+            append(&postfix_tokens, cur_token);
         }
 
         if (is_debug) {
             printf("output:\n");
-            for (j = 0; j < output.size; j++) {
+            for (j = 0; j < postfix_tokens.size; j++) {
                 printf("  ");
-                re_token_print(*(re_token_t*)at(&output, j));
+                re_token_print(*(re_token_t*)at(&postfix_tokens, j));
             }
             printf("op_stack:\n");
             for (j = 0; j < op_stack.size; j++) {
@@ -470,16 +471,16 @@ parse_regex(const char* input_str, const int is_debug)
     }
     /* pop op stack to output until it is empty */
     while (op_stack.size != 0) {
-        append(&output, back(&op_stack));
+        append(&postfix_tokens, back(&op_stack));
         pop(&op_stack);
     }
-    dynarr_free(&input);
+    dynarr_free(&input_tokens);
     dynarr_free(&op_stack);
 
     if (is_debug) {
         printf("--- postfix result ---\n");
-        for (i = 0; i < output.size; i++) {
-            re_token_print(*(re_token_t*)at(&output, i));
+        for (i = 0; i < postfix_tokens.size; i++) {
+            re_token_print(*(re_token_t*)at(&postfix_tokens, i));
         }
     }
 
@@ -489,14 +490,14 @@ parse_regex(const char* input_str, const int is_debug)
         printf("--- build ast tree ---\n");
     }
 
-    ast.tokens = output.data;
-    ast.size = output.size;
-    ast.lefts = malloc(output.size * sizeof(int));
-    ast.rights = malloc(output.size * sizeof(int));
-    memset(ast.lefts, 0xFF, output.size * sizeof(int));
-    memset(ast.rights, 0xFF, output.size * sizeof(int));
+    ast.tokens = postfix_tokens.data;
+    ast.size = postfix_tokens.size;
+    ast.lefts = malloc(postfix_tokens.size * sizeof(int));
+    ast.rights = malloc(postfix_tokens.size * sizeof(int));
+    memset(ast.lefts, 0xFF, postfix_tokens.size * sizeof(int));
+    memset(ast.rights, 0xFF, postfix_tokens.size * sizeof(int));
     index_stack = dynarr_new(sizeof(int));
-    for (i = 0; i < output.size; i++) {
+    for (i = 0; i < postfix_tokens.size; i++) {
         re_token_t* cur_token = &ast.tokens[i];
         switch (cur_token->type) {
         case TYPE_BYTE:

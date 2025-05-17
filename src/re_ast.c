@@ -1,9 +1,27 @@
-#include "nfa.h"
-#include "re.h"
+#include "re_token.h"
+#include "re_ast.h"
 #include <stdio.h>
+#include <string.h>
+
+void
+re_ast_free(re_ast_t* ast)
+{
+    if (ast == NULL) {
+        return;
+    }
+    if (ast->tokens) {
+        free(ast->tokens);
+    }
+    if (ast->lefts != NULL) {
+        free(ast->lefts);
+    }
+    if (ast->rights != NULL) {
+        free(ast->rights);
+    }
+}
 
 epsnfa
-re2nfa(const re_ast_t* re_ast, const int is_debug)
+re_ast_to_nfa(const re_ast_t* re_ast, const int is_debug)
 {
     epsnfa result;
     tepsnfa* nfas;
@@ -14,7 +32,7 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
     /* if ast is empty */
     if (re_ast->size == 0) {
         tepsnfa empty = tepsnfa_one_transition(eps_matcher());
-        result = tepsnfa_reduce_eps_as_epsnfa(&empty);
+        result = tepsnfa_to_epsnfa_and_reduce_eps(&empty);
         tepsnfa_clear(&empty);
         return result;
     }
@@ -158,7 +176,7 @@ re2nfa(const re_ast_t* re_ast, const int is_debug)
             tepsnfa_print(&nfas[cur_index]);
         }
     }
-    result = tepsnfa_reduce_eps_as_epsnfa(&nfas[re_ast->root]);
+    result = tepsnfa_to_epsnfa_and_reduce_eps(&nfas[re_ast->root]);
     result.char_class_pool = char_class_pool;
     for (i = 0; i < re_ast->size; i++) {
         tepsnfa_clear(&nfas[i]);

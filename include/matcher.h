@@ -1,6 +1,6 @@
 #include "bitmask.h"
 #include "char_class.h"
-#include "re.h"
+#include "re_token.h"
 #include <ctype.h>
 #include <stdio.h>
 
@@ -63,9 +63,10 @@ get_matcher_str(matcher_t m)
     return matcher_str;
 }
 
+/* anchor or byte. anchor is represented as negative int */
 typedef int anchor_byte;
-#define ANCHOR_BYTE_START ((anchor_byte)(-1))
-#define ANCHOR_BYTE_END ((anchor_byte)(-2))
+#define ANCHOR_BYTE_START ((anchor_byte)(-(ANCHOR_START + 1)))
+#define ANCHOR_BYTE_END ((anchor_byte)(-(ANCHOR_END + 1)))
 
 static inline int
 isword(anchor_byte byte)

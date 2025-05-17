@@ -1,6 +1,6 @@
 # NacRE
 
-NacRE is a lightweight, NFA-based regular expression engine that supports a subset of regex syntax. It is designed to parse and match patterns efficiently using NFA.
+NacRE is a lightweight, NFA-based regular expression engine that supports a subset of Perl compatible regex (PCRE) syntax.
 
 ## Supported Syntax
 
