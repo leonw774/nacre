@@ -5,8 +5,9 @@ NacRE is a lightweight, NFA-based regular expression engine that supports a subs
 ## Supported Syntax
 
 - Literals: `a`, `b`, `c`, etc.
+- Escaped Characters: `\f`, `\n`, `\r`, `\t`, `\v`
 - Wildcards: `.`, `\d`, `\D`, `\w`, `\W`, `\s`, `\S`, 
-- Anchors: `^`, `$`
+- Anchors: `^`, `$`, `\b`
 - Quantifiers: `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`
 - Alternation: `|`
 - Grouping: `()`
@@ -39,8 +40,10 @@ make release
 ./nacre [OPTIONS] PATTERN INPUT_FILE
 ```
 
+The default match mode is find the first match from the start of file to the end of the file.
+
 ### Options:
-- `-g`: Global matching (find all matches).
+- `-g`: Global matching (find all matches)
 - `-m`: Multiline matching (process input line by line).
 
 ### Example:
