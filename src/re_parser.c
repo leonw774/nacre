@@ -426,11 +426,12 @@ parse_regex(const char* input_str, const int is_debug)
             /* pop stack to output until top is left parenthese or
                the precedence of stack top is not lower */
             re_token_t* stack_top = back(&op_stack);
-            while (stack_top != NULL
-                   && stack_top->type != TYPE_LP
-                   /* parenthese's precedence < all operators */
-                   && cur_token->type != TYPE_LP
-                   && OP_PRECED_LT(stack_top->payload.op, cur_token->payload.op)
+            while (
+                stack_top != NULL
+                && stack_top->type != TYPE_LP
+                /* parenthese's precedence < all operators */
+                && cur_token->type != TYPE_LP
+                && OP_PRECED_LT(stack_top->payload.op, cur_token->payload.op)
             ) {
                 append(&postfix_tokens, stack_top);
                 pop(&op_stack);
@@ -500,7 +501,16 @@ parse_regex(const char* input_str, const int is_debug)
     index_stack = dynarr_new(sizeof(int));
     for (i = 0; i < postfix_tokens.size; i++) {
         re_token_t* cur_token = &ast.tokens[i];
-        switch (cur_token->type) {
+        int type = cur_token->type;
+        int is_op = type == TYPE_UOP || type == TYPE_DUP || type == TYPE_BOP;
+        if (is_op && index_stack.size == 0) {
+            printf(
+                "error when parsing pattern: an opartor doesn't have operand: "
+            );
+            re_token_print(*cur_token);
+            exit(1);
+        }
+        switch (type) {
         case TYPE_BYTE:
         case TYPE_WC:
         case TYPE_ANCHOR:
