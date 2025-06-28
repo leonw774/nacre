@@ -36,7 +36,8 @@ print_match(const char* buffer, const match_t match)
     }
     line_end = line_start;
 
-    while (buffer[line_end]) {
+    while (buffer[line_end] && print_match_count < match.length) {
+        /* print the line that contains the match */
         while (buffer[line_end] != '\0' && buffer[line_end] != '\n') {
             line_end++;
         }
@@ -44,22 +45,25 @@ print_match(const char* buffer, const match_t match)
             fwrite(buffer + line_start, 1, line_end - line_start, stdout);
         }
         printf("\n");
+        /* print the "^"s that mark the match */
+        i = 0;
         if (is_match_started == 0) {
-            for (i = 0; i < match.col - 1; i++) {
+            for (; i < match.col - 1; i++) { /* col -1 cause it starts from 1 */
                 printf(" ");
             }
             is_match_started = 1;
         }
-        for (; i < line_end - line_start; i++) {
+        /* line_end + 1 because line_end points to a newline or EOF
+           which could be matched
+        */
+        for (; i < line_end + 1 - line_start; i++) {
             if (print_match_count < match.length) {
                 printf("^");
                 print_match_count++;
             }
         }
         printf("\n");
-        if (buffer[line_end] == '\0' || print_match_count >= match.length) {
-            break;
-        }
+        /* update */
         line_start = line_end + 1;
         line_end = line_start;
     }

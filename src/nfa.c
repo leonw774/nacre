@@ -667,9 +667,9 @@ epsnfa_find_matches(
                 break;
             }
         }
-        /* update line and col between start to start + match_len */
+        /* update line and col from start to start + match_len */
         for (i = 0; i < (match_len ? match_len : 1); i++) {
-            if (start && input[i + start - 1] == '\n') {
+            if (start && input[start + i] == '\n') {
                 line_num++;
                 col_num = 1;
             } else {
@@ -693,7 +693,7 @@ epsnfa_find_matches_multiline(
         while (input[line_end] != '\0' && input[line_end] != '\n') {
             line_end++;
         }
-        line_len = line_end - line_start;
+        line_len = line_end + 1 - line_start;
         for (i = 0; i < line_len; i++) {
             match_len = epsnfa_find_initial_match(
                 epsnfa, &input[line_start], line_len, i
@@ -712,6 +712,7 @@ epsnfa_find_matches_multiline(
             }
         }
         line_num++;
+        /* line_end + 1 because line_end points to a newline or EOF */
         line_start = line_end + 1;
         line_end = line_start;
     }
