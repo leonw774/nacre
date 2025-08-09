@@ -252,16 +252,16 @@ tepsnfa_to_opt(tepsnfa* self)
     );
 }
 
-epsnfa
-tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
+/* remove states with zero degree from tepsnfa, return epsnfa */
+static epsnfa
+to_epsnfa(const tepsnfa* input)
 {
     size_t i, j;
-    epsnfa temp, output;
-    int* state_map = malloc(input->state_num * sizeof(int));
+    epsnfa output;
     int* state_degrees = calloc(input->state_num, sizeof(int));
-    // tepsnfa_print(input);
-
-    /* input --> remove states with zero degree --> temp */
+    int* output_index = malloc(input->state_num * sizeof(int));
+    int nonzero_deg_state_index = 0;
+    /* get degrees */
     for (i = 0; i < input->state_transitions.size; i++) {
         dynarr_t* transition_set = at(&input->state_transitions, i);
         for (j = 0; j < transition_set->size; j++) {
@@ -270,120 +270,120 @@ tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
             state_degrees[t->to_state]++;
         }
     }
-    {
-        int nonzero_deg_count = 0;
-        memset(state_map, -1, sizeof(int) * input->state_num);
-        for (i = 0; i < input->state_num; i++) {
-            if (state_degrees[i] != 0) {
-                // printf(
-                //     "%d -> %d (%d)\n", i, nonzero_deg_count, state_degrees[i]
-                // );
-                state_map[i] = nonzero_deg_count;
-                nonzero_deg_count++;
-            }
+    /* assign new index to state removing zero-degree states */
+    memset(output_index, -1, sizeof(int) * input->state_num);
+    for (i = 0; i < input->state_num; i++) {
+        if (state_degrees[i] != 0) {
+            output_index[i] = nonzero_deg_state_index;
+            nonzero_deg_state_index++;
         }
-        temp = epsnfa_new(nonzero_deg_count);
     }
-
-    /* temp --> set start & finish states */
-    bitmask_add(&temp.is_finish, state_map[input->final_state]);
-    bitmask_add(&temp.is_start, state_map[input->start_state]);
-
-    /* temp --> fill transition table */
+    /* copy nonzero-degree states to epsnfa */
+    output = epsnfa_new(nonzero_deg_state_index);
+    bitmask_add(&output.is_finish, output_index[input->final_state]);
+    bitmask_add(&output.is_start, output_index[input->start_state]);
     for (i = 0; i < input->state_num; i++) {
         dynarr_t* transition_set = at(&input->state_transitions, i);
         for (j = 0; j < transition_set->size; j++) {
             transition_t* t = at(transition_set, j);
-            int k = state_map[i] * temp.state_num + state_map[t->to_state];
-            temp.transition_table[k] = t->matcher;
+            int k = output_index[i] * output.state_num
+                + output_index[t->to_state];
+            output.transition_table[k] = t->matcher;
         }
     }
     free(state_degrees);
-    free(state_map);
-    // epsnfa_print(&temp);
+    free(output_index);
+    return output;
+}
 
-    /* temp --> reduce epsilon */
-    for (i = 0; i < temp.state_num; i++) {
-        epsnfa_reduce_eps(&temp, i);
-    }
-    // epsnfa_print(&temp);
-
-    /* temp --> remove all out edges from zero in-degree non-starts state */
-    assert(temp.state_num > 0);
-    state_map = malloc(temp.state_num * sizeof(int));
-    state_degrees = calloc(temp.state_num, sizeof(int));
-    for (i = 0; i < temp.state_num; i++) {
-        for (j = 0; j < temp.state_num; j++) {
-            int k = i * temp.state_num + j;
-            if (temp.transition_table[k].flag != MATCHER_FLAG_NIL) {
-                state_degrees[j]++; /* we count only in-degree this time */
+/* remove unreachable states from epsnfa, return new epsnfa */
+static epsnfa
+remove_unreachable_states(epsnfa* input)
+{
+    size_t i, j;
+    epsnfa output;
+    int* state_in_degrees = calloc(input->state_num, sizeof(int));
+    int* state_degrees = calloc(input->state_num, sizeof(int));
+    int* output_index = malloc(input->state_num * sizeof(int));
+    int nonzero_deg_state_index = 0;
+    /* get in-degrees */
+    for (i = 0; i < input->state_num; i++) {
+        for (j = 0; j < input->state_num; j++) {
+            int k = i * input->state_num + j;
+            if (input->transition_table[k].flag != MATCHER_FLAG_NIL) {
+                state_in_degrees[j]++;
             }
         }
     }
-    for (i = 0; i < temp.state_num; i++) {
-        if (!bitmask_contains(&temp.is_start, i) && state_degrees[i] == 0) {
-            /* remove the whole row */
+    /* if in-degree is zero and is not start than remove all its out-edges */
+    for (i = 0; i < input->state_num; i++) {
+        if (!bitmask_contains(&input->is_start, i)
+            && state_in_degrees[i] == 0) {
             memset(
-                &temp.transition_table[i * temp.state_num], 0,
-                sizeof(matcher_t) * temp.state_num
+                &input->transition_table[i * input->state_num], 0,
+                sizeof(matcher_t) * input->state_num
             );
         }
     }
-
-    /* temp --> remove states with zero degree again --> output */
-    memset(state_degrees, 0, temp.state_num * sizeof(int));
-    for (i = 0; i < temp.state_num; i++) {
-        for (j = 0; j < temp.state_num; j++) {
-            int k = i * temp.state_num + j;
-            if (temp.transition_table[k].flag != MATCHER_FLAG_NIL) {
+    /* get degrees again */
+    for (i = 0; i < input->state_num; i++) {
+        for (j = 0; j < input->state_num; j++) {
+            int k = i * input->state_num + j;
+            if (input->transition_table[k].flag != MATCHER_FLAG_NIL) {
                 state_degrees[i]++;
                 state_degrees[j]++;
             }
         }
     }
-    {
-        int nonzero_deg_count = 0;
-        memset(state_map, -1, sizeof(int) * temp.state_num);
-        for (i = 0; i < temp.state_num; i++) {
-            if (bitmask_contains(&temp.is_start, i) || state_degrees[i] != 0) {
-                // printf(
-                //     "%d -> %d (%d)\n", i, nonzero_deg_count, state_degrees[i]
-                // );
-                state_map[i] = nonzero_deg_count;
-                nonzero_deg_count++;
-            }
-        }
-        output = epsnfa_new(nonzero_deg_count);
-    }
-
-    /* output --> set start & finish states */
-    for (i = 0; i < temp.state_num; i++) {
-        if (bitmask_contains(&temp.is_start, i)) {
-            bitmask_add(&output.is_start, state_map[i]);
-        }
-        if (bitmask_contains(&temp.is_finish, i)) {
-            bitmask_add(&output.is_finish, state_map[i]);
+    /* assign new index for output removing zero-degree states */
+    memset(output_index, -1, sizeof(int) * input->state_num);
+    for (i = 0; i < input->state_num; i++) {
+        if (bitmask_contains(&input->is_start, i) || state_degrees[i] != 0) {
+            output_index[i] = nonzero_deg_state_index;
+            nonzero_deg_state_index++;
         }
     }
-
-    /* output --> fill transition table */
-    for (i = 0; i < temp.state_num; i++) {
-        if (state_map[i] == -1) {
+    /* copy nonzero-degree states to output */
+    output = epsnfa_new(nonzero_deg_state_index);
+    /* copy starts and finishes */
+    for (i = 0; i < input->state_num; i++) {
+        if (bitmask_contains(&input->is_start, i)) {
+            bitmask_add(&output.is_start, output_index[i]);
+        }
+        if (bitmask_contains(&input->is_finish, i)) {
+            bitmask_add(&output.is_finish, output_index[i]);
+        }
+    }
+    /* copy transitions */
+    for (i = 0; i < input->state_num; i++) {
+        if (output_index[i] == -1) {
             continue;
         }
-        for (j = 0; j < temp.state_num; j++) {
-            if (state_map[j] == -1) {
+        for (j = 0; j < input->state_num; j++) {
+            if (output_index[j] == -1) {
                 continue;
             }
-            int k = state_map[i] * output.state_num + state_map[j];
-            int l = i * temp.state_num + j;
-            output.transition_table[k] = temp.transition_table[l];
+            int k = output_index[i] * output.state_num + output_index[j];
+            int l = i * input->state_num + j;
+            output.transition_table[k] = input->transition_table[l];
         }
     }
+    free(state_in_degrees);
     free(state_degrees);
-    free(state_map);
+    free(output_index);
+    return output;
+}
+
+epsnfa
+tepsnfa_to_epsnfa_and_reduce_eps(tepsnfa* input)
+{
+    epsnfa temp = to_epsnfa(input);
+    size_t i;
+    for (i = 0; i < temp.state_num; i++) {
+        epsnfa_reduce_eps(&temp, i);
+    }
+    epsnfa output = remove_unreachable_states(&temp);
     epsnfa_clear(&temp);
-    // epsnfa_print(&output);
     return output;
 }
 
@@ -574,8 +574,8 @@ epsnfa_find_initial_match(
         printf("---\n");
         printf("input pos : %lu\n", cur_pos);
         printf("cur char  : %c\n", cur_char);
-        printf("stack size: %d\n", stack.size + 1);
-        printf("cur state : %*d\n", stack.size + 1, cur_mem.cur_state);
+        printf("stack size: %lu\n", stack.size + 1);
+        printf("cur state : %*lu\n", stack.size + 1, cur_mem.cur_state);
         printf("---\n");
 #endif
 
@@ -583,7 +583,6 @@ epsnfa_find_initial_match(
             && bitmask_contains(&self->is_finish, cur_mem.cur_state)) {
             matched_len = cur_pos;
         }
-
         if (cur_mem.depth == MATCH_SEARCH_DEPTH_LIMIT) {
             continue;
         }
@@ -597,7 +596,7 @@ epsnfa_find_initial_match(
                 continue;
             }
 #ifdef VERBOSE_MATCH
-            printf("%d %s\n", i, get_matcher_str(m));
+            printf("%lu %s\n", i, get_matcher_str(m));
 #endif
             if (m.flag & MATCHER_FLAG_ANCHOR) {
                 if (cur_pos == 0 && start_offset == 0) {
@@ -605,7 +604,7 @@ epsnfa_find_initial_match(
                 } else {
                     behind = input_str[start_offset + cur_pos - 1];
                 }
-                if (cur_pos + start_offset > intput_len - 1) {
+                if (cur_pos + start_offset == intput_len - 1) {
                     ahead = ANCHOR_BYTE_END;
                 } else {
                     ahead = cur_char;
